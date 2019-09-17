@@ -41,7 +41,8 @@ class GraphMLP_lX_X:
             # PLACEHOLDERS
             self.x = tf.placeholder(tf.float32, shape=[None, input_history,  input_dim], name='inputs')
             self.y = tf.placeholder(tf.float32, shape=[None, output_dim], name='target')
-            self.step = tf.placeholder(tf.int32)
+            self.step = tf.placeholder(tf.int32, name='step')
+            self.is_training = tf.placeholder(tf.bool, name='is_training')
             self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
             self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
 
@@ -68,7 +69,8 @@ class GraphCNN_lx_kxcxi_lx_x:
             # PLACEHOLDERS
             self.x = tf.placeholder(tf.float32, shape=[None, input_history, input_dim], name='inputs')
             self.y = tf.placeholder(tf.float32, shape=[None, output_forecast, output_dim], name='target')
-            self.step = tf.placeholder(tf.int32)
+            self.step = tf.placeholder(tf.int32, name='step')
+            self.is_training = tf.placeholder(tf.bool, name='is_training')
             self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
             self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
 
