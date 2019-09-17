@@ -102,7 +102,7 @@ class Settings:
         self.output_dir  = args.output
         self.model_ckpt  = os.path.join(args.output,'model_ckpt')
         self.tb_dir      = args.tb_dir
-        self.tb_log_name = args.tb_log_name
+        self.tb_log_name = os.path.join(self.tb_dir, args.tb_log_name)
         # Tensorboard
         self.allow_tb    = args.allow_tb
         # Cross-Validation
