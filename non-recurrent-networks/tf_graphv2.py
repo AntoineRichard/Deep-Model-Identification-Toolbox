@@ -62,6 +62,8 @@ class GraphMLP_lX_X:
             self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
             self.acc_op = accuracy(self.diff)
             self.train_step = train_fn(self.w_loss, 0.01)
+            # Tensorboard
+            self.merged = tf.summary.merge_all()
 
 class GraphCNN_lx_kxcxi_lx_x:
     def __init__(self,input_history,input_dim,output_forecast,output_dim, kc, d, act=tf.nn.relu):
@@ -93,6 +95,8 @@ class GraphCNN_lx_kxcxi_lx_x:
             self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
             self.acc_op = accuracy(self.diff)
             self.train_step = train_fn(self.w_loss, 0.01)
+            # Tensorboard
+            self.merged = tf.summary.merge_all()
 
 class GraphCNN_k3c2ik3c2ip2k3c2ik3c2id64d64:
     def __init__(self,input_history,input_dim,output_forecast,output_dim):
