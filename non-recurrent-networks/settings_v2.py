@@ -1,4 +1,5 @@
 import argparse
+import os
 
 class Settings:
     '''
@@ -41,7 +42,9 @@ class Settings:
         self.log_frequency  = None 
         self.learning_rate  = None 
         # Model
-        self.model = None
+        self.model       = None
+        self.restore     = None
+        self.path_weight = None
 
         ### RUN ###
         self.run()
@@ -84,7 +87,8 @@ class Settings:
         parser.add_argument('--learning_rate', type=float, default='0.005', help='the learning rate')
         # Model
         parser.add_argument('--model', type=str, help='the name of the model check code for available models')
-        
+        parser.add_argument('--restore', type=bool, required=False, default=False, help='use a pretrained model as weights for ours.')
+        parser.add_argument('--weight_path', type=str, required=False, default='/.', help='path to the weights')
         args = parser.parse_args()
         return args
 
@@ -126,7 +130,9 @@ class Settings:
         self.log_frequency  = args.log_frequency
         self.learning_rate  = args.learning_rate
         # Model
-        self.model = args.model
+        self.model       = args.model
+        self.restore     = args.restore
+        self.path_weight = args.weight_path
 
     def generate_tensorboard_name(self):
         if self.tb_log_name == 'TOD':
