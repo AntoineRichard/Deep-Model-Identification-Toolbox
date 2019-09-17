@@ -72,6 +72,7 @@ class UniformTraining:
         prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
         _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
                                                           self.M.y: batch_ys,
+                                                          self.M.weights: np.ones(self.sts.batch_size),
                                                           self.M.keep_prob: self.sts.dropout,
                                                           self.M.step: i,
                                                           self.M.is_training: True})
@@ -85,6 +86,7 @@ class UniformTraining:
         acc, loss, summaries = sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
+                                                     self.M.weights: np.ones(self.sts.batch_size),
                                                      self.M.keep_prob: self.sts.dropout,
                                                      self.M.step: i,
                                                      self.M.is_training: False})
@@ -103,6 +105,7 @@ class UniformTraining:
         acc, loss, summaries = sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
+                                                     self.M.weights: np.ones(self.sts.batch_size),
                                                      self.M.keep_prob: self.sts.dorpout,
                                                      self.M.step: i})
                                                      self.M.is_training: False})
@@ -122,51 +125,44 @@ class UniformTraining:
         
     def eval_on_validation_multi_step(self, i):
         # Multi step performance evaluation on validation set
-        worse = 0
-        avg = []
-        trajectories = []
-        GT = []
-        # Sample 
-        batch_x, batch_y = sampler.sample_val_trajectory()
-        full = batch_x[:,:self.input_history,:]
         predictions = []
-
-        for k in range(self.input_history, self.input_history+self.test_window - 1):
-            pred = sess.run(self.graph_mlp.y_,feed_dict = {self.graph_mlp.x: full, self.graph_mlp.keep_prob:1.0, self.graph_mlp.step: i})
+        # Sample trajectory batch out of the evaluation set
+        batch_x, batch_y = sampler.sample_val_trajectory()
+        # Take only the first elements of the trajectory
+        full = batch_x[:,:self.sts.sequence_length,:]
+        # Run iterative predictions
+        for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
+            # Get predictions
+            pred = sess.run(self.M.y_, feed_dict = {self.M.x: full,
+                                                    self.M.keep_prob:self.sts.dropout,
+                                                    self.M.is_training: False,
+                                                    self.M.step: i})
             predictions.append(np.expand_dims(pred, axis=1))
-            cmd = batch_x[:, k+1, -self.cmd_dim:]
+            # Remove first elements of old batch add predictions
+            # concatenated with the next command input
+            cmd = batch_x[:, k+1, -self.sts.cmd_dim:]
             new = np.concatenate((pred, cmd), axis=1)
             new = np.expand_dims(new, axis=1)
             old = full[:,1:,:]
             full = np.concatenate((new,old), axis=1)
-        predictions = np.concatenate(predictions,axis = 1)
-        error_x1 = SK_MSE(predictions[:,:,0],batch_y[:,:-1,0])
-        error_x2 = SK_MSE(predictions[:,:,1],batch_y[:,:-1,1])
-        error_x3 = SK_MSE(predictions[:,:,2],batch_y[:,:-1,2])
-        trajectories.append(predictions)
-        GT.append(batch_y[:-1,:3])
-        err = [error_x1, error_x2, error_x3]
-        if np.mean(err) > worse:
-            worse = np.mean(err)
-        avg.append(err)
-
-        err = np.mean(avg,axis=0)
-        avg = np.mean(avg)
-        if avg < best_ms_nn:
-            trajectories = np.array(trajectories)
-            GT = np.array(GT)
-            np.save(self.output_path + '/best_trajectories_predicted',trajectories)
-            np.save(self.output_path + '/best_trajectories_groundtruth',GT)
-            best_ms_nn = avg
-            NN_save_name = self.output_path + '/best_NN'
-            saver.save(sess, NN_save_name)
-        if worse < least_worse_ms_nn:
-            least_worse_ms_nn = worse
-            NN_save_name = self.output_path + '/least_worse_NN'
-            saver.save(sess, NN_save_name)
-        # Multi step performance evaluation on test set
+        predictions = np.concatenate(predictions, axis = 1)
+        # Compute per variable error
+        error_x = [SK_MSE(predictions[:,:,i], batch_y[:,:-1,i]) for i in range(predictions.shape[-1])]
+        worse = np.max(np.mean(error_x,axis=-1))
+        err = np.mean(error_x, axis=0)
+        avg = np.mean(err)
+        # Update multistep hard-logs
         elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
         test_logs_multi_step.append([i] + [elapsed_time] + list(err) + [worse])
+        # Update inner variable
+        if avg < self.best_ms:
+            self.best_ms = avg
+            NN_save_name = os.path.join(self.sts.output_dir,'/Best_MS')
+            self.saver.save(self.sess, NN_save_name)
+        if worse < self.lw_ms:
+            self.lw_ms = worse
+            NN_save_name = os.path.join(self.sts.output_dir,'/Least_Worse_MS')
+            self.saver.save(self.sess, NN_save_name)
 
     def display(self, i, acc, worse, ms_acc):
         # Simple console display every N iterations
