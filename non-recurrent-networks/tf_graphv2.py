@@ -3,9 +3,12 @@ import tensorflow as tf
 
 def accuracy(estimation):
     accuracy = tf.reduce_mean(tf.cast(estimation, tf.float32),axis = 0)
+    tf.summary.scalar('accuracy', accuracy)
     return accuracy
 
 def train_fn(loss, learning_rate):
+    tf.summary.scalar('loss', loss)
+    tf.summary.scalar('learning_rate', learning_rate)
     with tf.variable_scope('train'):
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
     return train_step
@@ -30,7 +33,6 @@ class OneWayTransformer:
             return tf.matmul(p_attn, value), p_attn
 
     def multi_head_attention(self, )
-
 
 class GraphMLP_lX_X:
     def __init__(self,input_history, input_dim, output_forecast, output_dim, d, act=tf.nn.relu):
