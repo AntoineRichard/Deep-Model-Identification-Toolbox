@@ -11,6 +11,7 @@ class Settings:
         self.test_dir    = None 
         self.val_dir     = None 
         self.output_dir  = None 
+        self.model_ckpt  = None
         self.tb_dir      = None 
         self.tb_log_name = None 
         # Tensorboard
@@ -99,6 +100,7 @@ class Settings:
         self.test_dir    = args.test_data
         self.val_dir     = args.val_data
         self.output_dir  = args.output
+        self.model_ckpt  = os.path.join(args.output,'model_ckpt')
         self.tb_dir      = args.tb_dir
         self.tb_log_name = args.tb_log_name
         # Tensorboard
