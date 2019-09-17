@@ -93,8 +93,7 @@ class Settings:
         args = parser.parse_args()
         return args
 
-    def assign_args(self):
-        args = self.arg_parser()
+    def assign_args(self, args):
         # Data and directories
         self.train_dir   = args.train_data
         self.test_dir    = args.test_data
@@ -106,7 +105,7 @@ class Settings:
         # Tensorboard
         self.allow_tb    = args.allow_tb
         # Cross-Validation
-        self.use_X_val  = args.use_cross_validation
+        self.use_X_val  = args.use_cross_valid
         self.test_ratio = args.test_ratio
         self.val_ratio  = args.val_ratio
         self.test_idx   = args.test_idx
@@ -136,8 +135,8 @@ class Settings:
         self.restore     = args.restore
         self.path_weight = args.weight_path
 
-    def generate_tensorboard_name(self):
-        if self.tb_log_name == 'TOD':
+    def generate_tensorboard_name(self, args):
+        if args.tb_log_name == 'TOD':
             from time import gmtime, strftime
             self.tb_log_name = strftime('%Y-%m-%d %H:%M:%S', gmtime())
 
@@ -162,6 +161,7 @@ class Settings:
             pass
 
     def run(self):
-        self.generate_tensorboard_name()
-        self.assign_args()
+        args = self.arg_parser()
+        self.generate_tensorboard_name(args)
+        self.assign_args(args)
         self.check_and_generate_directories()
