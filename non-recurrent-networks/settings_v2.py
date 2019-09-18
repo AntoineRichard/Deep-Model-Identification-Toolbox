@@ -42,6 +42,7 @@ class Settings:
         self.max_iterations = None 
         self.log_frequency  = None 
         self.learning_rate  = None 
+        self.dropout        = None
         # Model
         self.model       = None
         self.restore     = None
@@ -80,12 +81,13 @@ class Settings:
         parser.add_argument('--trajectory_length', type=int, default='20', help='size of the trajectory window')
         parser.add_argument('--input_dim', type=int, default='5', help='size of the input sample: using x,y,z coordinates as a data-point means input_dim = 3.')
         parser.add_argument('--output_dim', type=int, default='3', help='size of the sample to predict: predicting x, y, z velocities means output_dim = 3.')
-        parser.add_argument('--timestamp_idx', type=int, required=False, default='0', help='Index of the timestamp if present in the data')
+        parser.add_argument('--timestamp_idx', type=int, required=False, help='Index of the timestamp if present in the data')
         # Training settings 
         parser.add_argument('--batch_size', type=int, default='32', help='size of the batch')
         parser.add_argument('--max_iterations', type=int, default='10', help='maximum number of epochs')
         parser.add_argument('--log_frequency', type=int, default='25', help='Loging frequency in batch.')
         parser.add_argument('--learning_rate', type=float, default='0.005', help='the learning rate')
+        parser.add_argument('--dropout', type=float, default='0.75', help='the learning rate')
         # Model
         parser.add_argument('--model', type=str, help='the name of the model check code for available models')
         parser.add_argument('--restore', type=bool, required=False, default=False, help='use a pretrained model as weights for ours.')
@@ -130,6 +132,7 @@ class Settings:
         self.max_iterations = args.max_iterations
         self.log_frequency  = args.log_frequency
         self.learning_rate  = args.learning_rate
+        self.dropout        = args.dropout
         # Model
         self.model       = args.model
         self.restore     = args.restore

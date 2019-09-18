@@ -3,7 +3,7 @@ import h5py as h5
 import numpy as np
 
 class H5Reader:
-    def __init__(self, path2train, path2test, path2val, input_dim, output_dim, cmd_dim, sequence_size, mult_win, ts_idx=None):
+    def __init__(self, path2train, path2test, path2val, input_dim, output_dim, cmd_dim, sequence_size, mult_win, d1, d2, d3, d4, ts_idx=None):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.cmd_dim = cmd_dim
@@ -103,3 +103,7 @@ class H5Reader:
         self.val_x, self.val_y = self.sequence_generator(val_x, val_y)
         self.test_traj_x, self.test_traj_y = self.trajectory_generator(test_x, test_y)
         self.val_traj_x, self.val_traj_y = self.trajectory_generator(val_x, val_y)
+        # get sizes
+        self.train_size = self.train_x.shape[0]
+        self.test_size = self.test_x.shape[0]
+        self.val_size = self.val_x.shape[0]

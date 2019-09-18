@@ -8,9 +8,9 @@ from sklearn.metrics import mean_squared_error as SK_MSE
 #custom import
 import samplers_v2
 import readers_v2
-import tf_graph_v2
+import tf_graphv2
 import settings_v2
-import networklist_processor
+import networklist_processor_v2
 
 class UniformTraining:
     """
@@ -36,14 +36,21 @@ class UniformTraining:
         #TODO use setting object in reader instead of feeding a shit tone of arguments
         self.DS = readers_v2.H5Reader(self.sts.train_dir, self.sts.test_dir,
                                       self.sts.val_dir, self.sts.input_dim,
-                                      self.sts.output_dim, self.sts.sequence_length,
-                                      self.sts.trajectory_length, self.sts.val_ratio,
-                                      self.sts.test_ratio, self.sts.val_idx,
-                                      self.sts.test_idx, ts_idx = self.sts.timestamp_idx)
+                                      self.sts.output_dim, self.sts.cmd_dim,
+                                      self.sts.sequence_length, self.sts.trajectory_length,
+                                      self.sts.val_ratio, self.sts.test_ratio,
+                                      self.sts.val_idx, self.sts.test_idx,
+                                      ts_idx = self.sts.timestamp_idx)
+
+    def load_sampler(self):
+        #TODO integrate setting object in sampler
+        self.SR = samplers_v2.UniformSampler(self.DS)
+
     def load_model(self):
         #TODO use setting object in the model to improve flexibility
         #TODO make networklist_processor less ugly
-        self.M = networklist_processor.get_graph(self.sts.model, self.sts.sequence_length, self.sts.input_dim, self.sts.output_dim)
+        self.M = networklist_processor_v2.get_graph(self.sts.model, self.sts.sequence_length,
+                                                 self.sts.input_dim, self.sts.output_dim)
     
     def init_records(self):
         # Hard-Record settings (numpy array)
@@ -53,18 +60,16 @@ class UniformTraining:
         self.best_1s = np.inf
         self.best_ms = np.inf
         self.lw_ms = np.inf
-        self.strt_tm = datetime.datetime.now()
+        self.start_time = datetime.datetime.now()
 
     def saver_init_and_restore(self):
         # Saver init
         self.sess.run(tf.global_variables_initializer())
-        self.sess.run(tf.local_variables_initializer())
         self.saver = tf.train.Saver()
         self.train_writer = tf.summary.FileWriter(self.sts.tb_dir + '/train', self.sess.graph)
         self.test_writer = tf.summary.FileWriter(self.sts.tb_dir + '/test')
         if self.sts.restore:
-            self.saver.restore(sess, self.sts.path_weight)
-        
+            self.saver.restore(self.sess, self.sts.path_weight)
 
     def train_step(self, i):
         # Training on training set
@@ -83,15 +88,15 @@ class UniformTraining:
         #TODO REMOVE MAGIC NUMBER (1000) in eval train batch set default argument ?
         prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch(1000)
         # Computes accuracy and loss + acquires summaries
-        acc, loss, summaries = sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
+        acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
-                                                     self.M.weights: np.ones(self.sts.batch_size),
+                                                     self.M.weights: np.ones(batch_xs.shape[0]),
                                                      self.M.keep_prob: self.sts.dropout,
                                                      self.M.step: i,
                                                      self.M.is_training: False})
         # Update hard-logs
-        elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
+        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         self.train_logs.append([i] + [elapsed_time] + list(acc))
         # Write tensorboard logs
         self.train_writer.add_summary(summaries, i)
@@ -100,17 +105,17 @@ class UniformTraining:
         # Single-Step performance evaluation on validation set
         # Sample a batch as the whole of the validation set
         # TODO set option full dataset or given batch size
-        batch_xs , batch_ys = sampler.sample_val_batch() 
+        batch_xs , batch_ys = self.SR.sample_val_batch() 
         # Computes accuracy and loss + acquires summaries
-        acc, loss, summaries = sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
+        acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
-                                                     self.M.weights: np.ones(self.sts.batch_size),
+                                                     self.M.weights: np.ones(batch_xs.shape[0]),
                                                      self.M.keep_prob: self.sts.dorpout,
-                                                     self.M.step: i})
+                                                     self.M.step: i,
                                                      self.M.is_training: False})
         # Update Single-Step hard-logs
-        elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
+        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         self.test_logs.append([i] + [elapsed_time]+list(acc))
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
@@ -127,7 +132,7 @@ class UniformTraining:
         # Multi step performance evaluation on validation set
         predictions = []
         # Sample trajectory batch out of the evaluation set
-        batch_x, batch_y = sampler.sample_val_trajectory()
+        batch_x, batch_y = self.SR.sample_val_trajectory()
         # Take only the first elements of the trajectory
         full = batch_x[:,:self.sts.sequence_length,:]
         # Run iterative predictions
@@ -135,6 +140,7 @@ class UniformTraining:
             # Get predictions
             pred = sess.run(self.M.y_, feed_dict = {self.M.x: full,
                                                     self.M.keep_prob:self.sts.dropout,
+                                                    self.M.weights: np.ones(batch_xs.shape[0]),
                                                     self.M.is_training: False,
                                                     self.M.step: i})
             predictions.append(np.expand_dims(pred, axis=1))
@@ -152,7 +158,7 @@ class UniformTraining:
         err = np.mean(error_x, axis=0)
         avg = np.mean(err)
         # Update multistep hard-logs
-        elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
+        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         test_logs_multi_step.append([i] + [elapsed_time] + list(err) + [worse])
         # Update inner variable
         if avg < self.best_ms:
@@ -163,6 +169,7 @@ class UniformTraining:
             self.lw_ms = worse
             NN_save_name = os.path.join(self.sts.output_dir,'/Least_Worse_MS')
             self.saver.save(self.sess, NN_save_name)
+        return err, worse
 
     def display(self, i, acc, worse, ms_acc):
         # Simple console display every N iterations
@@ -188,28 +195,45 @@ class UniformTraining:
 
     def train(self):
         with tf.Session() as self.sess:
-            self.saver_init_and_restore() 
+            self.saver_init_and_restore()
             for i in range(self.sts.max_iterations):
-                self.train_step()
+                self.train_step(i)
                 if i%10 == 0:
-                    self.train_eval()
+                    self.eval_on_train(i)
                 if i%50 == 0:
-                    self.val_eval_ss()
-                    self.val_eval_ms()
+                    acc = self.eval_on_validation_single_step(i)
+                    acc_t, worse = self.eval_on_validation_multi_step(i)
                 if i%250 == 0:
-                    self.display()
-
+                    self.display(i, acc, worse, acc_t)
+            self.dump_logs()
+"""
 class PERTraining(UniformTraining):
     def __init__(self):
         super(PERTraining, self).__init__()
+        # Load Sampler
+        self.sampler = None
+        self.load_sampler()
+
+    def load_sampler(self):
+        #TODO integrate setting object in sampler
+        self.SR = sampler_v2.PERSampler(self.DS, alpha = self.sts.alpha, beta = self.sts.beta, e = self.sts.epsilon)
 
     def train_per():
-        w_i = np.ones(self.bs)
-        _ = sess.run(self.graph.train_step, feed_dict = {self.graph.x:batch_xs, self.graph.y:batch_ys, self.graph.keep_prob: 0.75, self.graph.step: i, self.graph.weights: w_i})
+        w_i, batch_xs, batch_ys = self.SR.sample_train_batch(self.batch_size)
+        _ = sess.run(self.M.train_step, feed_dict = {self.M.x:batch_xs,
+                                                     self.M.y:batch_ys,
+                                                     self.M.weights: w_i,
+                                                     self.M.keep_prob: self.sts.dropout,
+                                                     self.M.step: i,
+                                                     self.M.is_training: True})
 
 class GradTraining(UniformTraining):
     def __init__(self):
         super(GradTraining, self).__init__()
+
+    def load_sampler(self):
+        #TODO integrate setting object in sampler
+        self.SR = sampler_v2.GradSampler(self.DS)
 
     def train_grad():
         w_i_scoring = np.ones(self.ss_bs)
@@ -218,7 +242,6 @@ class GradTraining(UniformTraining):
         idxs, w_i = sampler.sample_scored_batch(self.ss_bs, self.bs, score)
         batch_xs, batch_ys = sampler.train_batch_RNN(idxs)
         _ = sess.run(train_step, feed_dict = {x:batch_xs, y:batch_ys, keep_prob: 1.0, step: i, weights:w_i})
-
+"""
 if __name__ == '__main__':
-
-
+    UT = UniformTraining()

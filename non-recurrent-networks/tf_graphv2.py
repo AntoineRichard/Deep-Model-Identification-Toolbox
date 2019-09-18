@@ -3,7 +3,7 @@ import tensorflow as tf
 
 def accuracy(estimation):
     accuracy = tf.reduce_mean(tf.cast(estimation, tf.float32),axis = 0)
-    tf.summary.scalar('accuracy', accuracy)
+    tf.summary.scalar('accuracy', tf.reduce_mean(accuracy))
     return accuracy
 
 def train_fn(loss, learning_rate):
@@ -32,38 +32,38 @@ class OneWayTransformer:
                 p_attn = dropout(p_attn)
             return tf.matmul(p_attn, value), p_attn
 
-    def multi_head_attention(self, )
+    #def multi_head_attention(self, )
 
 class GraphMLP_lX_X:
-    def __init__(self,input_history, input_dim, output_forecast, output_dim, d, act=tf.nn.relu):
+    def __init__(self, input_history, input_dim, output_dim, d, act=tf.nn.relu):
 
-        self.g = tf.Graph()
-        with self.g.as_default():
+        #self.g = tf.Graph()
+        #with self.g.as_default():
 
-            # PLACEHOLDERS
-            self.x = tf.placeholder(tf.float32, shape=[None, input_history,  input_dim], name='inputs')
-            self.y = tf.placeholder(tf.float32, shape=[None, output_dim], name='target')
-            self.step = tf.placeholder(tf.int32, name='step')
-            self.is_training = tf.placeholder(tf.bool, name='is_training')
-            self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
-            self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, input_history,  input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
 
-            # Reshape
-            self.xr = tf.reshape(self.x, [-1, input_history*input_dim],name='reshape')
-            # Operations
-            for i, di in enumerate(d):
-                self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-            self.y_ = tf.layers.dense(self.d1, output_dim, activation=None, name='output')
-            # Loss
-            self.diff = tf.square(tf.subtract(self.y_,self.y))
-            self.s_loss = tf.reduce_mean(self.diff, axis=1)
-            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
-            # Train
-            self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-            self.acc_op = accuracy(self.diff)
-            self.train_step = train_fn(self.w_loss, 0.01)
-            # Tensorboard
-            self.merged = tf.summary.merge_all()
+        # Reshape
+        self.xr = tf.reshape(self.x, [-1, input_history*input_dim],name='reshape')
+        # Operations
+        for i, di in enumerate(d):
+            self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
+        self.y_ = tf.layers.dense(self.xr, output_dim, activation=None, name='output')
+        # Loss
+        self.diff = tf.square(tf.subtract(self.y_,self.y))
+        self.s_loss = tf.reduce_mean(self.diff, axis=1)
+        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        # Train
+        self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.diff)
+        self.train_step = train_fn(self.w_loss, 0.01)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
 
 class GraphCNN_lx_kxcxi_lx_x:
     def __init__(self,input_history,input_dim,output_forecast,output_dim, kc, d, act=tf.nn.relu):

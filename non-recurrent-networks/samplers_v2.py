@@ -39,6 +39,8 @@ class UniformSampler:
         x = np.array(X)
         y = np.array(Y)
         max_iter = x.shape[0]
+        if batch_size is None:
+            return 1.0, x,y
         # Yield based loop: Generator
         for i in range(max_iter):
             yield [i*1./max_iter, x[i],y[i]]
@@ -51,7 +53,7 @@ class UniformSampler:
         try:
             return next(self.TB)
         except:
-            self.TB = self.sampler(self.DS.train_x, self.train_y, bs)
+            self.TB = self.sample(self.DS.train_x, self.DS.train_y, bs)
             return next(self.TB)
     
     def sample_eval_train_batch(self, bs):
@@ -62,30 +64,30 @@ class UniformSampler:
         try:
             return next(self.TBE)
         except:
-            self.TBE = self.sampler(self.DS.train_x, self.train_y, bs)
+            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, bs)
             return next(self.TBE)
      
-    def sample_test_batch(self, bs):
+    def sample_test_batch(self, bs=None):
         """
         This function returns the test batch along with the percentage completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         try:
-            return next(self.TB)
+            return next(self.TeB)
         except:
-            self.TB = self.sampler(self.DS.test_x, self.test_y, bs)
-            return next(self.TB)
+            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, bs)
+            return next(self.TeB)
 
-    def sample_val_batch(self, bs):
+    def sample_val_batch(self, bs=None):
         """
         This function returns the val batch along with the percentage completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         try:
-            return next(self.TB)
+            return next(self.TvB)
         except:
-            self.TB = self.sampler(self.DS.val_x, self.val_y, bs)
-            return next(self.TB)
+            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, bs)
+            return next(self.TvB)
     
     def sample_val_trajectory(self):
         """
