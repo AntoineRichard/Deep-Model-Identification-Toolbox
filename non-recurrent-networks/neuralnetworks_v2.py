@@ -12,6 +12,8 @@ import tf_graphv2
 import settings_v2
 import networklist_processor_v2
 
+#TODO fix depecrated for full binding with TensorFlow 1.14.0
+
 class UniformTraining:
     """
     Training container, extended for advanced priorization schemes.
@@ -33,14 +35,7 @@ class UniformTraining:
         self.train()
 
     def load_dataset(self):
-        #TODO use setting object in reader instead of feeding a shit tone of arguments
-        self.DS = readers_v2.H5Reader(self.sts.train_dir, self.sts.test_dir,
-                                      self.sts.val_dir, self.sts.input_dim,
-                                      self.sts.output_dim, self.sts.cmd_dim,
-                                      self.sts.sequence_length, self.sts.trajectory_length,
-                                      self.sts.val_ratio, self.sts.test_ratio,
-                                      self.sts.val_idx, self.sts.test_idx,
-                                      ts_idx = self.sts.timestamp_idx)
+        self.DS = readers_v2.H5Reader(self.sts)
 
     def load_sampler(self):
         #TODO integrate setting object in sampler
@@ -199,7 +194,7 @@ class UniformTraining:
                 self.train_step(i)
                 if i%10 == 0:
                     self.eval_on_train(i)
-                if i%50 == 0:
+                if i%self.sts.log_frequency == 0:
                     acc = self.eval_on_validation_single_step(i)
                     acc_t, worse = self.eval_on_validation_multi_step(i)
                 if i%250 == 0:
