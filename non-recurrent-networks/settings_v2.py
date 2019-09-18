@@ -84,7 +84,7 @@ class Settings:
         parser.add_argument('--timestamp_idx', type=int, required=False, help='Index of the timestamp if present in the data')
         # Training settings 
         parser.add_argument('--batch_size', type=int, default='32', help='size of the batch')
-        parser.add_argument('--max_iterations', type=int, default='10', help='maximum number of epochs')
+        parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
         parser.add_argument('--log_frequency', type=int, default='25', help='Loging frequency in batch.')
         parser.add_argument('--learning_rate', type=float, default='0.005', help='the learning rate')
         parser.add_argument('--dropout', type=float, default='0.75', help='the learning rate')
