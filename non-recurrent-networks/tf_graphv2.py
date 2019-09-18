@@ -37,9 +37,6 @@ class OneWayTransformer:
 class GraphMLP_lX_X:
     def __init__(self, settings, d, act=tf.nn.relu):
 
-        #self.g = tf.Graph()
-        #with self.g.as_default():
-
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
@@ -66,7 +63,7 @@ class GraphMLP_lX_X:
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphCNN_lx_kxcxi_lx_x:
+class GraphCNN_kXcX_pX_lX_X:
     def __init__(self,input_history,input_dim,output_forecast,output_dim, kc, d, act=tf.nn.relu):
         self.g = tf.Graph()
         with self.g.as_default():
