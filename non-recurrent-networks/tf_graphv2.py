@@ -56,7 +56,7 @@ class GraphMLP_lX_X:
             self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.y_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output')
         # Loss
-        self.diff = tf.square(tf.subtract(self.y_,self.yr))
+        self.diff = tf.square(tf.subtract(self.y_, self.yr))
         self.s_loss = tf.reduce_mean(self.diff, axis=1)
         self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
         # Train

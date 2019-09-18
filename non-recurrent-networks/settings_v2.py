@@ -148,6 +148,10 @@ class Settings:
         if args.tb_log_name == 'TOD':
             from time import gmtime, strftime
             self.tb_log_name = strftime('%Y-%m-%d %H:%M:%S', gmtime())
+            s = '_'
+            self.tb_log_name = s.join(self.tb_log_name.split(' '))
+            self.tb_log_name = s.join(self.tb_log_name.split('-'))
+            self.tb_log_name = s.join(self.tb_log_name.split(':'))
 
     def check_and_generate_directories(self):
         # Check directories

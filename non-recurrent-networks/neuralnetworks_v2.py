@@ -59,8 +59,8 @@ class UniformTraining:
         # Saver init
         self.sess.run(tf.global_variables_initializer())
         self.saver = tf.train.Saver()
-        self.train_writer = tf.summary.FileWriter(self.sts.tb_dir + '/train', self.sess.graph)
-        self.test_writer = tf.summary.FileWriter(self.sts.tb_dir + '/test')
+        self.train_writer = tf.summary.FileWriter(os.path.join(self.sts.tb_log_name,'train'), self.sess.graph)
+        self.test_writer = tf.summary.FileWriter(os.path.join(self.sts.tb_log_name,'test'))
         if self.sts.restore:
             self.saver.restore(self.sess, self.sts.path_weight)
 
