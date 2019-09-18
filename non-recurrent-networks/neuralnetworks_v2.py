@@ -155,11 +155,11 @@ class UniformTraining:
         # Update inner variable
         if avg < self.best_ms:
             self.best_ms = avg
-            NN_save_name = os.path.join(self.sts.output_dir,'Best_MS')
+            NN_save_name = os.path.join(self.sts.model_ckpt,'Best_MS')
             self.saver.save(self.sess, NN_save_name)
         if worse < self.lw_ms:
             self.lw_ms = worse
-            NN_save_name = os.path.join(self.sts.output_dir,'Least_Worse_MS')
+            NN_save_name = os.path.join(self.sts.model_ckpt,'Least_Worse_MS')
             self.saver.save(self.sess, NN_save_name)
         return error_x, worse
 
