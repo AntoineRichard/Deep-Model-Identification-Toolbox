@@ -42,10 +42,8 @@ class UniformTraining:
         self.SR = samplers_v2.UniformSampler(self.DS)
 
     def load_model(self):
-        #TODO use setting object in the model to improve flexibility
         #TODO make networklist_processor less ugly
-        self.M = networklist_processor_v2.get_graph(self.sts.model, self.sts.sequence_length,
-                                                 self.sts.input_dim, self.sts.output_dim)
+        self.M = networklist_processor_v2.get_graph(self.sts)
     
     def init_records(self):
         # Hard-Record settings (numpy array)
