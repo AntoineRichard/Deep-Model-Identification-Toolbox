@@ -37,7 +37,7 @@ class UniformSampler:
 
         for i in range(int(x.shape[0]/batch_size)):
             X.append(x[i*batch_size:(i+1)*batch_size,:,:])
-            Y.append(y[i*batch_size:(i+1)*batch_size,:])
+            Y.append(y[i*batch_size:(i+1)*batch_size,:,:])
         x = np.array(X)
         y = np.array(Y)
         max_iter = x.shape[0]
@@ -51,7 +51,6 @@ class UniformSampler:
         x = x[s].copy()
         y = y[s].copy()
         return 1.0, x, y
-
 
     def sample_train_batch(self, bs):
         """
