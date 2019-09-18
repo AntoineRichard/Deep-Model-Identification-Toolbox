@@ -105,13 +105,13 @@ class UniformTraining:
         # Single-Step performance evaluation on validation set
         # Sample a batch as the whole of the validation set
         # TODO set option full dataset or given batch size
-        batch_xs , batch_ys = self.SR.sample_val_batch() 
+        prct, batch_xs , batch_ys = self.SR.sample_val_batch() 
         # Computes accuracy and loss + acquires summaries
         acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
                                                      self.M.weights: np.ones(batch_xs.shape[0]),
-                                                     self.M.keep_prob: self.sts.dorpout,
+                                                     self.M.keep_prob: self.sts.dropout,
                                                      self.M.step: i,
                                                      self.M.is_training: False})
         # Update Single-Step hard-logs
@@ -120,7 +120,7 @@ class UniformTraining:
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
         if  avg < self.best_1s:
-            self.best_1s_nn = avg
+            self.best_1s = avg
             NN_save_name = os.path.join(self.sts.model_ckpt,'Best_1S')
             self.saver.save(self.sess, NN_save_name)
         # Write tensorboard logs
@@ -138,9 +138,9 @@ class UniformTraining:
         # Run iterative predictions
         for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
             # Get predictions
-            pred = sess.run(self.M.y_, feed_dict = {self.M.x: full,
+            pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
                                                     self.M.keep_prob:self.sts.dropout,
-                                                    self.M.weights: np.ones(batch_xs.shape[0]),
+                                                    self.M.weights: np.ones(full.shape[0]),
                                                     self.M.is_training: False,
                                                     self.M.step: i})
             predictions.append(np.expand_dims(pred, axis=1))
@@ -154,32 +154,31 @@ class UniformTraining:
         predictions = np.concatenate(predictions, axis = 1)
         # Compute per variable error
         error_x = [SK_MSE(predictions[:,:,i], batch_y[:,:-1,i]) for i in range(predictions.shape[-1])]
-        worse = np.max(np.mean(error_x,axis=-1))
-        err = np.mean(error_x, axis=0)
-        avg = np.mean(err)
+        worse = np.max(error_x)
+        avg = np.mean(error_x)
         # Update multistep hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        test_logs_multi_step.append([i] + [elapsed_time] + list(err) + [worse])
+        self.test_logs_multi_step.append([i] + [elapsed_time] + list(error_x) + [worse])
         # Update inner variable
         if avg < self.best_ms:
             self.best_ms = avg
-            NN_save_name = os.path.join(self.sts.output_dir,'/Best_MS')
+            NN_save_name = os.path.join(self.sts.output_dir,'Best_MS')
             self.saver.save(self.sess, NN_save_name)
         if worse < self.lw_ms:
             self.lw_ms = worse
-            NN_save_name = os.path.join(self.sts.output_dir,'/Least_Worse_MS')
+            NN_save_name = os.path.join(self.sts.output_dir,'Least_Worse_MS')
             self.saver.save(self.sess, NN_save_name)
-        return err, worse
+        return error_x, worse
 
     def display(self, i, acc, worse, ms_acc):
         # Simple console display every N iterations
-        print('Step: ', str(i), ', 1s acc:', str(acc), ', ', str(self.test_window),
+        print('Step: ', str(i), ', 1s acc:', str(acc), ', ', str(self.sts.trajectory_length),
                        's worse acc: ', str(worse), ', ',
                        str(self.sts.trajectory_length), 's avg acc: ', str(ms_acc))
 
     def dump_logs(self):
         # Save model weights at the end of training
-        NN_save_name = self.output_path + '/final_NN'
+        NN_save_name = os.path.join(self.sts.output_dir,'final_NN')
         self.saver.save(self.sess, NN_save_name)
         # Display training statistics
         print('#### TRAINING DONE ! ####')
@@ -187,7 +186,7 @@ class UniformTraining:
         print('Best multi-steps-Accuracy reach for: ' + str(self.best_ms))
         print('Least Worse Accuracy reach for: ' + str(self.lw_ms))
         # Write hard-logs as numpy arrays
-        np.save(self.sts.output_dir + "/train_loss_log.npy", np.array(self.rain_logs))
+        np.save(self.sts.output_dir + "/train_loss_log.npy", np.array(self.train_logs))
         np.save(self.sts.output_dir + "/test_single_step_loss_log.npy", np.array(self.test_logs))
         np.save(self.sts.output_dir + "/test_multi_step_loss_log.npy", np.array(self.test_logs_multi_step))
         np.save(self.sts.output_dir + "/means.npy", self.DS.mean)
