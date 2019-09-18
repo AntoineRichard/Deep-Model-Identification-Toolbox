@@ -18,6 +18,7 @@ class Settings:
         self.allow_tb = None
         # Cross-Validation
         self.use_X_val  = None 
+        self.folds      = None
         self.test_ratio = None 
         self.val_ratio  = None 
         self.test_idx   = None 
@@ -32,6 +33,7 @@ class Settings:
         self.superbatch_size = None
         # Data settings
         self.sequence_length   = None 
+        self.forecast          = None
         self.trajectory_length = None 
         self.input_dim         = None 
         self.output_dim        = None 
@@ -66,8 +68,9 @@ class Settings:
         parser.add_argument('--use_cross_valid', type=bool, default=False, help='The ratio of data allocated for validation')
         parser.add_argument('--test_ratio', type=float, required=False, default='0.2', help='The ratio of data allocated to testing, if only providing one training set')
         parser.add_argument('--val_ratio', type=float, required=False, default='0.1', help='The ratio of data allocated for validation')
-        parser.add_argument('--val_idx', type=int, required=False, default='0', help='The ratio of data allocated for validation')
-        parser.add_argument('--test_idx', type=int, required=False, default='0', help='The ratio of data allocated for validation')
+        parser.add_argument('--folds', type=int, required=False, default='5', help='The number of fold to perform during cross validation')
+        parser.add_argument('--val_idx', type=int, required=False, default='0', help='The index of the validation fold')
+        parser.add_argument('--test_idx', type=int, required=False, default='0', help='The index of the test fold')
         # Priorization settings
         parser.add_argument('--priorization', type=str, default='uniform', help='chose between the different type of optimization. uniform, PER or grad.')
         # PER settings
@@ -78,6 +81,7 @@ class Settings:
         parser.add_argument('--superbatch_size', type=int, required=False, default='256', help='size of the super batch if using gradient upper-bound priorization scheme')
         # Data settings
         parser.add_argument('--max_sequence_size', type=int, default='12', help='number of points used to predict the outputs')
+        parser.add_argument('--forecast', type=int, default='1', help='number of points to predict')
         parser.add_argument('--trajectory_length', type=int, default='20', help='size of the trajectory window')
         parser.add_argument('--input_dim', type=int, default='5', help='size of the input sample: using x,y,z coordinates as a data-point means input_dim = 3.')
         parser.add_argument('--output_dim', type=int, default='3', help='size of the sample to predict: predicting x, y, z velocities means output_dim = 3.')
@@ -110,6 +114,7 @@ class Settings:
         self.use_X_val  = args.use_cross_valid
         self.test_ratio = args.test_ratio
         self.val_ratio  = args.val_ratio
+        self.folds      = args.folds
         self.test_idx   = args.test_idx
         self.val_idx    = args.val_idx
         # Priorization settings
@@ -122,6 +127,7 @@ class Settings:
         self.superbatch_size = args.superbatch_size
         # Data settings
         self.sequence_length   = args.max_sequence_size
+        self.forecast          = args.forecast
         self.trajectory_length = args.trajectory_length
         self.input_dim         = args.input_dim
         self.output_dim        = args.output_dim
@@ -144,12 +150,14 @@ class Settings:
             self.tb_log_name = strftime('%Y-%m-%d %H:%M:%S', gmtime())
 
     def check_and_generate_directories(self):
+        # Check directories
         if not os.path.isdir(self.train_dir):
             raise('Cannot find directory ', self.train_dir)
         if (self.test_dir is not None) and (not os.path.isdir(self.test_dir)):
             raise('Cannot find directory ', self.test_dir)
         if (self.val_dir is not None) and (not os.path.isdir(self.val_dir)):
             raise('Cannot find directory ', self.val_dir)
+        # Generates directories
         try:
             os.mkdir(self.output_dir)
         except:
@@ -163,8 +171,17 @@ class Settings:
         except:
             pass
 
+    def check_X_val(self):
+        if self.use_X_val:
+            if self.folds < self.val_idx:
+                raise("The validation index cannot be higher than the number of folds (indexing starts at 0 in python)")
+            if self.folds < self.test_idx:
+                raise("The test index cannot be higher than the number of folds (indexing starts at 0 in python)")
+
+
     def run(self):
         args = self.arg_parser()
         self.generate_tensorboard_name(args)
         self.assign_args(args)
         self.check_and_generate_directories()
+        self.check_X_val()
