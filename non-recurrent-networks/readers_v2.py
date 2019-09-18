@@ -2,17 +2,15 @@ import os
 import h5py as h5
 import numpy as np
 
+#TODO DOCU
+#TODO Create trajectories on each file individually
+#TODO Add continuity flag handling
+#TODO Add multi-step forecast support
+#TODO Add cross-validation support (Homemade or Sklearn ?)
+          # Custom made to select val/test/train area (indices)
 class H5Reader:
-    def __init__(self, path2train, path2test, path2val, input_dim, output_dim, cmd_dim, sequence_size, mult_win, d1, d2, d3, d4, ts_idx=None):
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.cmd_dim = cmd_dim
-        self.seq_len = sequence_size
-        self.window = mult_win
-        self.ts_idx = ts_idx
-        self.train_root = path2train
-        self.test_root = path2test
-        self.val_root = path2val
+    def __init__(self, settings):
+        self.sts = settings
 
         self.std = None
         self.mean = None
@@ -33,13 +31,13 @@ class H5Reader:
 
     def remove_ts(self, data):
         if self.ts_idx is not None:
-           return data[:,[x for x in range(data.shape[1]) if x != self.ts_idx]]
+           return data[:,[x for x in range(data.shape[1]) if x != self.sts.timestamp_idx]]
         else:
            return data
 
     def normalize(self, train_xy, test_xy, val_xy):
-        self.mean = np.mean(train_xy,axis=0)
-        self.std = np.std(train_xy,axis=0)
+        self.mean = np.mean(train_xy, axis=0)
+        self.std = np.std(train_xy, axis=0)
         train_xy = (train_xy - self.mean) / self.std
         test_xy = (test_xy - self.mean) / self.std
         val_xy = (val_xy - self.mean) / self.std
@@ -50,8 +48,11 @@ class H5Reader:
         data = []
         for i in files:
             data.append(np.array(h5.File(os.path.join(root,i),'r')["train_X"]))
-        numpy_data = np.concatenate((data),axis=0)
+        numpy_data = np.concatenate((data), axis=0)
         return numpy_data
+
+    def cross_validation_split(self):
+        raise('Not implemented')
 
     def split_input_output(self, xy):
         x = xy
@@ -85,8 +86,19 @@ class H5Reader:
     def load_data(self):
         # Load each dataset
         train_xy = self.load(self.train_root)
-        test_xy = self.load(self.test_root)
-        val_xy = self.load(self.val_root)
+        if (self.test_root is not None) and (self.val_root is not None):
+            if self.sts.use_X_val:
+                raise('Cannot use cross-validation with separated directory for training validation and testing.')
+            else:
+                test_xy = self.load(self.test_root)
+                val_xy = self.load(self.val_root)
+        elif self.test_root is None and self.val_root is not None:
+            raise('Test root was not provided but validation root was, provide none or both.')
+        elif self.val_root is None and self.test_root is not None:
+            raise('Validation root was not provided but test root was, provide none or both.')
+        else:
+            train_xy, text_xy, val_xy = self.cross_validation_split()
+
         # Remove time-stamp if need be
         train_xy = self.remove_ts(train_xy)
         test_xy = self.remove_ts(test_xy)
