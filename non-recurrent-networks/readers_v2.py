@@ -107,3 +107,5 @@ class H5Reader:
         self.train_size = self.train_x.shape[0]
         self.test_size = self.test_x.shape[0]
         self.val_size = self.val_x.shape[0]
+        self.test_traj_size = self.test_traj_x.shape[0]
+        self.val_traj_size = self.val_traj_x.shape[0]
