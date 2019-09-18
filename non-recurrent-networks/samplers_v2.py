@@ -26,24 +26,32 @@ class UniformSampler:
             A generator object (see usage)
         """
         # Shuffle
-        s = np.arange(self.DS.train_size)
+        s = np.arange(x.shape[0])
         np.random.shuffle(s)
         x = x[s].copy()
         y = y[s].copy()
         # Generates batches
         X = []
         Y = []
+        # If batch_size is None then return the whole dataset
+
         for i in range(int(x.shape[0]/batch_size)):
             X.append(x[i*batch_size:(i+1)*batch_size,:,:])
             Y.append(y[i*batch_size:(i+1)*batch_size,:])
         x = np.array(X)
         y = np.array(Y)
         max_iter = x.shape[0]
-        if batch_size is None:
-            return 1.0, x,y
         # Yield based loop: Generator
         for i in range(max_iter):
             yield [i*1./max_iter, x[i],y[i]]
+
+    def shuffle(self, x, y):
+        s = np.arange(x.shape[0])
+        np.random.shuffle(s)
+        x = x[s].copy()
+        y = y[s].copy()
+        return 1.0, x, y
+
 
     def sample_train_batch(self, bs):
         """
@@ -61,6 +69,8 @@ class UniformSampler:
         This function returns the train batch along with the percentage completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
+        if bs is None:
+            return self.shuffle(self.DS.val_x, self.DS.val_y)
         try:
             return next(self.TBE)
         except:
@@ -72,6 +82,8 @@ class UniformSampler:
         This function returns the test batch along with the percentage completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
+        if bs is None:
+            return self.shuffle(self.DS.val_x, self.DS.val_y)
         try:
             return next(self.TeB)
         except:
@@ -83,6 +95,8 @@ class UniformSampler:
         This function returns the val batch along with the percentage completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
+        if bs is None:
+            return self.shuffle(self.DS.val_x, self.DS.val_y)
         try:
             return next(self.TvB)
         except:
