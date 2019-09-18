@@ -28,23 +28,29 @@ class H5Reader:
         self.load_data()
 
     def remove_ts(self, data):
-        if self.ts_idx is not None:
+        if self.sts.timestamp_idx is not None:
            return data[:,[x for x in range(data.shape[1]) if x != self.sts.timestamp_idx]]
         else:
            return data
 
-    def normalize(self, train_xy, test_xy, val_xy):
-        self.mean = np.mean(train_xy, axis=0)
-        self.std = np.std(train_xy, axis=0)
-        train_xy = (train_xy - self.mean) / self.std
-        test_xy = (test_xy - self.mean) / self.std
-        val_xy = (val_xy - self.mean) / self.std
-        return train_xy, test_xy, val_xy
+    def normalize(self, train_x, train_y, test_x, test_y, val_x, val_y):
+        self.mean = np.mean(np.mean(train_x, axis=0), axis=0)
+        self.std = np.mean(np.std(train_x, axis=0), axis=0)
+
+        train_x = (train_x - self.mean) / self.std
+        test_x = (test_x - self.mean) / self.std
+        val_x = (val_x - self.mean) / self.std
+
+        train_y = (train_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
+        test_y = (test_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
+        val_y = (val_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
+
+        return train_x, train_y, test_x, test_y, val_x, val_y
 
     def load(self, root):
         files = os.listdir(root)
-        datax = []
-        datay = []
+        data_x = []
+        data_y = []
         for i in files:
             tmp = np.array(h5.File(os.path.join(root,i),'r')["train_X"])
             # Remove time-stamp if need be
@@ -54,11 +60,11 @@ class H5Reader:
             # generates sequences for training
             tmp_x, tmp_y = self.sequence_generator(tmp_x, tmp_y)
             # append for concatenation
-            data_x.append(tmpy)
-            data_y.append(tmpx)
+            data_x.append(tmp_x)
+            data_y.append(tmp_y)
         numpy_data_x = np.concatenate((data_x), axis=0)
         numpy_data_y = np.concatenate((data_y), axis=0)
-        return numpy_data
+        return numpy_data_x, numpy_data_y
 
     def cross_validation_split(self, x, y):
         x_split = np.split(x, self.sts.folds)
@@ -88,9 +94,9 @@ class H5Reader:
         nY = []
         # x is a sequence
         # y is the data-point right after the sequence
-        for i in range(x.shape[0]-1-self.sts.sequence_length):
+        for i in range(x.shape[0]-1-self.sts.sequence_length-self.sts.forecast):
             nX.append(x[i:i+self.sts.sequence_length])
-            nY.append(y[i+1+self.sts.sequence_length:i+self.sts.forecast+self.sts.sequence_length])
+            nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
@@ -114,8 +120,8 @@ class H5Reader:
             if self.sts.use_X_val:
                 raise('Cannot use cross-validation with separated directory for training validation and testing.')
             else:
-                test_xy = self.load(self.sts.test_dir)
-                val_xy = self.load(self.sts.val_dir)
+                test_x, test_y = self.load(self.sts.test_dir)
+                val_x, val_y = self.load(self.sts.val_dir)
         elif self.sts.test_dir is None and self.sts.val_dir is not None:
             raise('Test root was not provided but validation root was, provide none or both.')
         elif self.sts.val_dir is None and self.sts.test_dir is not None:
@@ -123,12 +129,13 @@ class H5Reader:
         elif self.sts.use_X_val:
             train_x, train_y, test_x, test_y, val_x, val_y = self.cross_validation_split(train_x, train_y)
         else:
-            self.ratio_based_split(train_x, train_y)
+            train_x, train_y, test_x, test_y, val_x, val_y = self.ratio_based_split(train_x, train_y)
 
+        # normalize all dataset based on the train-set
+        train_x, train_y, test_x, test_y, val_x, val_y = self.normalize(train_x, train_y, test_x, test_y, val_x, val_y)
+        # generate trajectories
         self.test_traj_x, self.test_traj_y = self.trajectory_generator(test_x, test_y)
         self.val_traj_x, self.val_traj_y = self.trajectory_generator(val_x, val_y)
-        # normalize all dataset based on the train-set
-        train_xy, test_xy, val_xy = self.normalize(train_x, train_y, test_x, test_y, val_x, val_y)
         # get sizes
         self.train_size = self.train_x.shape[0]
         self.test_size = self.test_x.shape[0]
