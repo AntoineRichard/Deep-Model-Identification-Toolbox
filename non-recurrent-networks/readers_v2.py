@@ -76,20 +76,23 @@ class H5Reader:
         numpy_data_y = np.concatenate((data_y), axis=0)
         return numpy_data_x, numpy_data_y, traj_x, traj_y
 
-    def cross_validation_split(self, x, y):
+    def split_var(self, x):
+        x = x[:self.sts.folds*(int(x.shape[0]/self.sts.folds))]
         x_split = np.split(x, self.sts.folds)
-        y_split = np.split(y, self.sts.folds)
         test_x = x_split[self.sts.test_idx]
-        test_y = y_split[self.sts.test_idx]
-        x = np.concatenate(x_split[[i for i in range(self.sts.folds) if i!=self.sts.test_idx]], axis=0)
-        y = np.concatenate(y_split[[i for i in range(self.sts.folds) if i!=self.sts.test_idx]], axis=0)
+        x = np.concatenate([x_split[i] for i in range(self.sts.folds) if i!=self.sts.test_idx], axis=0)
+        x = x[:self.sts.folds*(int(x.shape[0]/self.sts.folds))]
         x_split = np.split(x, self.sts.folds)
-        y_split = np.split(y, self.sts.folds)
         val_x = x_split[self.sts.val_idx]
-        val_y = y_split[self.sts.val_idx]
-        train_x = np.concatenate(x_split[[i for i in range(self.sts.folds) if i!=self.sts.val_idx]], axis=0)
-        train_y = np.concatenate(y_split[[i for i in range(self.sts.folds) if i!=self.sts.val_idx]], axis=0)
-        return train_x, train_y, test_x, test_y, val_x, val_y
+        train_x = np.concatenate([x_split[i] for i in range(self.sts.folds) if i!=self.sts.val_idx], axis=0)
+        return train_x, test_x, val_x
+
+    def cross_validation_split(self, x, y, x_traj, y_traj):
+        train_x, test_x, val_x = self.split_var(x)
+        train_y, test_y, val_y = self.split_var(y)
+        _, test_traj_x, val_traj_x = self.split_var(x_traj)
+        _, test_traj_y, val_traj_y = self.split_var(y_traj)
+        return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
     def ratio_based_split(self, x, y):
         raise('Not implemented')
@@ -125,7 +128,7 @@ class H5Reader:
 
     def load_data(self):
         # Load each dataset
-        train_x, train_y, traj_x, traj_x = self.load(self.sts.train_dir)
+        train_x, train_y, traj_x, traj_y = self.load(self.sts.train_dir)
         if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
             if self.sts.use_X_val:
                 raise('Cannot use cross-validation with separated directory for training validation and testing.')
@@ -137,9 +140,9 @@ class H5Reader:
         elif self.sts.val_dir is None and self.sts.test_dir is not None:
             raise('Validation root was not provided but test root was, provide none or both.')
         elif self.sts.use_X_val:
-            train_x, train_y, test_x, test_y, val_x, val_y = self.cross_validation_split(train_x, train_y)
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.cross_validation_split(train_x, train_y, traj_x, traj_y)
         else:
-            train_x, train_y, test_x, test_y, val_x, val_y = self.ratio_based_split(train_x, train_y)
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y)
 
         # normalize all dataset based on the train-set
         self.normalize(train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y)

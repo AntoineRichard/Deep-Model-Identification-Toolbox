@@ -95,7 +95,7 @@ class Settings:
         # Model
         parser.add_argument('--model', type=str, help='the name of the model check code for available models')
         parser.add_argument('--restore', type=bool, required=False, default=False, help='use a pretrained model as weights for ours.')
-        parser.add_argument('--weight_path', type=str, required=False, default='/.', help='path to the weights')
+        parser.add_argument('--weight_path', type=str, required=False, default='.', help='path to the weights')
         args = parser.parse_args()
         return args
 
@@ -177,7 +177,6 @@ class Settings:
                 raise("The validation index cannot be higher than the number of folds (indexing starts at 0 in python)")
             if self.folds < self.test_idx:
                 raise("The test index cannot be higher than the number of folds (indexing starts at 0 in python)")
-
 
     def run(self):
         args = self.arg_parser()
