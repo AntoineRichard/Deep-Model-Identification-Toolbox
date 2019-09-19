@@ -10,7 +10,7 @@ import samplers_v2
 import readers_v2
 import tf_graphv2
 import settings_v2
-import networklist_processor_v2
+import network_generator_v2
 
 #TODO fix depecrated for full binding with TensorFlow 1.14.0
 
@@ -42,8 +42,7 @@ class UniformTraining:
         self.SR = samplers_v2.UniformSampler(self.DS)
 
     def load_model(self):
-        #TODO make networklist_processor less ugly
-        self.M = networklist_processor_v2.get_graph(self.sts)
+        self.M = network_generator_v2.get_graph(self.sts)
     
     def init_records(self):
         # Hard-Record settings (numpy array)

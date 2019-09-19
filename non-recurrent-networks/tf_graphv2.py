@@ -34,7 +34,7 @@ class OneWayTransformer:
 
     #def multi_head_attention(self, )
 
-class GraphMLP_lX_X:
+class GraphMLP_dX:
     def __init__(self, settings, d, act=tf.nn.relu):
 
         # PLACEHOLDERS
@@ -63,40 +63,46 @@ class GraphMLP_lX_X:
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphCNN_kXcX_pX_lX_X:
-    def __init__(self,input_history,input_dim,output_forecast,output_dim, kc, d, act=tf.nn.relu):
-        self.g = tf.Graph()
-        with self.g.as_default():
+class GraphCNN_kXcX_pX_dX:
+    def __init__(self, settings, layers, params, act=tf.nn.relu):
 
-            # PLACEHOLDERS
-            self.x = tf.placeholder(tf.float32, shape=[None, input_history, input_dim], name='inputs')
-            self.y = tf.placeholder(tf.float32, shape=[None, output_forecast, output_dim], name='target')
-            self.step = tf.placeholder(tf.int32, name='step')
-            self.is_training = tf.placeholder(tf.bool, name='is_training')
-            self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
-            self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
 
-            # Operations
-            self.xc = self.x
-            for i, kci in enumerate(kc):
-                self.xc = tf.layers.conv1d(self.xc, input_dim*kci[1], kci[0], padding = 'same',activation=act ,name='conv1D_'+str(i))
-            self.rx = tf.reshape(self.xc, [-1, input_dim*kci[-1][1]*input_history],name='reshape')
-            for i, di in enumerate(d):
-                self.rx =  tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-            self.y_ = tf.layers.dense(self.d2, output_dim, activation=None, name='output')
+        # Reshape
+        self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
+        # Operations
+        must_reshape = True
+        self.xc = self.x
+        for i, layer_type in enumerate(layers):
+            if layer_type == 'conv':
+                self.xc = tf.layers.conv1d(self.xc, params[i][0], params[i][1], padding='same', activation=act, name='conv1D_'+str(i))
+            if layer_type == 'pool':
+                self.xc = tf.layers.max_pooling1d(self.xc, params[i], params[i], padding='same', name='max_pool1D_'+str(i))
+            if layer_type == 'dense':
+                if must_reshape:
+                    self.xc = tf.layers.flatten(self.xc, name='flatten')
+                    must_reshape = False
+                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
 
-            # Loss
-            self.diff = tf.square(tf.subtract(self.y_,self.y))
-            self.s_loss = tf.reduce_mean(self.diff, axis=1)
-            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
-            # Train
-            self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-            self.acc_op = accuracy(self.diff)
-            self.train_step = train_fn(self.w_loss, 0.01)
-            # Tensorboard
-            self.merged = tf.summary.merge_all()
+        # Loss
+        self.diff = tf.square(tf.subtract(self.y_,self.yr))
+        self.s_loss = tf.reduce_mean(self.diff, axis=1)
+        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        # Train
+        self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.diff)
+        self.train_step = train_fn(self.w_loss, 0.01)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
 
-class GraphCNN_k3c2ik3c2ip2k3c2ik3c2id64d64:
+class GraphCNN_k:
     def __init__(self,input_history,input_dim,output_forecast,output_dim):
         #inspired from https://stackoverflow.com/questions/44418442/building-tensorflow-graphs-inside-of-functions
 
