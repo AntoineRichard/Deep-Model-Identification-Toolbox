@@ -6,13 +6,14 @@ import tensorflow as tf
 import numpy as np
 from sklearn.metrics import mean_squared_error as SK_MSE
 #custom import
-import samplers
-import readers
-import models
-import settings
-import network_generator
+import samplers_v2
+import readers_v2
+import tf_graphv2
+import settings_v2
+import network_generator_v2
 
 #TODO fix depecrated for full binding with TensorFlow 1.14.0
+#TODO model weight and inference time
 
 class UniformTraining:
     """
@@ -20,7 +21,7 @@ class UniformTraining:
     """
     def __init__(self):
         # Setting object
-        self.sts = settings.Settings()
+        self.sts = settings_v2.Settings()
         # Dataset object
         self.DS = None
         self.load_dataset()
@@ -35,14 +36,14 @@ class UniformTraining:
         self.train()
 
     def load_dataset(self):
-        self.DS = readers.H5Reader(self.sts)
+        self.DS = readers_v2.H5Reader(self.sts)
 
     def load_sampler(self):
         #TODO integrate setting object in sampler
-        self.SR = samplers.UniformSampler(self.DS)
+        self.SR = samplers_v2.UniformSampler(self.DS)
 
     def load_model(self):
-        self.M = network_generator.get_graph(self.sts)
+        self.M = network_generator_v2.get_graph(self.sts)
     
     def init_records(self):
         # Hard-Record settings (numpy array)
