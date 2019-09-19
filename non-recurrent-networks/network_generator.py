@@ -1,4 +1,4 @@
-import tf_graphv2
+import models
 import tensorflow as tf
 
 def get_graph(settings):
@@ -17,7 +17,7 @@ def get_graph(settings):
             raise('error: unknown activation function')
         d = name[2:]
         d = [int(x) for x in d]
-        return tf_graphv2.GraphMLP_dX(settings, d, act=activation)
+        return models.GraphMLP_dX(settings, d, act=activation)
 
     elif name[0] == 'CNN':
         if name[1] == 'RELU':
@@ -44,9 +44,7 @@ def get_graph(settings):
             elif di[0] == 'd':
                 layer_type.append('dense')
                 layer_param.append(int(di[1:]))
-        #print(layer_type)
-        #print(layer_param)
-        return tf_graphv2.GraphCNN_kXcX_pX_dX(settings, layer_type, layer_param, act=activation)
+        return models.GraphCNN_kXcX_pX_dX(settings, layer_type, layer_param, act=activation)
 
     else:
         raise('error unknown model type')
