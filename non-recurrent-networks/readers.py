@@ -1,7 +1,7 @@
 import os
 import h5py as h5
 import numpy as np
-
+import csv
 #TODO DOCU
 #TODO Add continuity flag handling
 #TODO Unify sequence_generator and trajectory generator
@@ -33,21 +33,30 @@ class H5Reader:
         else:
            return data
 
+    def norm_state(self, x):
+        return (x - self.mean) / self.std
+    
+    def norm_pred(self, y):
+        return (y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
+
     def normalize(self, train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y):
         self.mean = np.mean(np.mean(train_x, axis=0), axis=0)
         self.std = np.mean(np.std(train_x, axis=0), axis=0)
 
-        self.train_x = (train_x - self.mean) / self.std
-        self.test_x = (test_x - self.mean) / self.std
-        self.val_x = (val_x - self.mean) / self.std
-        self.test_traj_x = (test_traj_x - self.mean) / self.std
-        self.val_traj_x = (val_traj_x - self.mean) / self.std
+        self.train_x     = self.norm_state(train_x)
+        self.test_x      = self.norm_state(test_x)     
+        self.val_x       = self.norm_state(val_x)      
+        self.test_traj_x = self.norm_state(test_traj_x)
+        self.val_traj_x  = self.norm_state(val_traj_x) 
 
-        self.train_y = (train_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
-        self.test_y = (test_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
-        self.val_y = (val_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
-        self.test_traj_y = (test_traj_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
-        self.val_traj_y = (val_traj_y - self.mean[:-self.sts.cmd_dim]) / self.std[:-self.sts.cmd_dim]
+        self.train_y     = self.norm_pred(train_y)    
+        self.test_y      = self.norm_pred(test_y)     
+        self.val_y       = self.norm_pred(val_y)      
+        self.test_traj_y = self.norm_pred(test_traj_y)
+        self.val_traj_y  = self.norm_pred(val_traj_y)
+
+    def read_file(self, path):
+        return np.array(h5.File(path,'r')["train_X"])
 
     def load(self, root):
         files = os.listdir(root)
@@ -56,7 +65,8 @@ class H5Reader:
         data_traj_x = []
         data_traj_y = []
         for i in files:
-            tmp = np.array(h5.File(os.path.join(root,i),'r')["train_X"])
+            # Load file
+            tmp = self.read_file(os.path.join(root,i))
             # Remove time-stamp if need be
             tmp = self.remove_ts(tmp)
             # split the input and targets
@@ -87,6 +97,11 @@ class H5Reader:
         train_x = np.concatenate([x_split[i] for i in range(self.sts.folds) if i!=self.sts.val_idx], axis=0)
         return train_x, test_x, val_x
 
+    def split_var_ratio(self, x):
+        x, x_test = np.split(x,[int(-self.sts.test_ratio*x.shape[0])])
+        x_train, x_val = np.split(x,[int(-self.sts.val_ratio*x.shape[0])])
+        return x_train, x_test, x_val
+
     def cross_validation_split(self, x, y, x_traj, y_traj):
         train_x, test_x, val_x = self.split_var(x)
         train_y, test_y, val_y = self.split_var(y)
@@ -94,8 +109,12 @@ class H5Reader:
         _, test_traj_y, val_traj_y = self.split_var(y_traj)
         return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
-    def ratio_based_split(self, x, y):
-        raise('Not implemented')
+    def ratio_based_split(self, x, y, traj_x, traj_y):
+        train_x, test_x, val_x = self.split_var_ratio(x)
+        train_y, test_y, val_y = self.split_var_ratio(y)
+        _, test_traj_x, val_traj_x = self.split_var_ratio(traj_x)
+        _, test_traj_y, val_traj_y = self.split_var_ratio(traj_y)
+        return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
     def split_input_output(self, xy):
         x = xy
@@ -152,3 +171,47 @@ class H5Reader:
         self.val_size = self.val_x.shape[0]
         self.test_traj_size = self.test_traj_x.shape[0]
         self.val_traj_size = self.val_traj_x.shape[0]
+
+class CSVReader(H5Reader):
+    def __init__(self, settings):
+        super(CSVReader, self).__init__(settings)
+        
+    def read_file(self, path):
+        with open("../data/datasets/EC data/Tomato_2019_Gadot/Tomato_2019_Gadot.csv") as f:
+            readCSV = csv.reader(f, delimiter=',')
+            content = []
+            for x in readCSV:
+                content.append(x)
+        
+        header = content[0]
+        data = content[1:]
+
+        src_idx, tgt_idx = self.parse_header(header)
+        return self.read_from_header(src_idx, tgt_idx, data)
+
+    def parse_header(self, header):
+        src_idx = [1000]*len(self.sts.source_header)
+        tgt_idx = [1000]*len(self.sts.target_header)
+        for i, name in enumerate(header):
+            for j, src in enumerate(self.sts.source_header):
+                if src == name:
+                    src_idx[j] = i
+            for j, tgt in enumerate(self.sts.target_header):
+                if tgt == name:
+                    tgt_idx[j] = i
+    
+        return src_idx, tgt_idx
+    
+    def read_from_header(self, src_idx, tgt_idx, data):
+        new_data = []
+        for x in data:
+            src = [x[idx] for idx in src_idx]
+            tgt = [x[idx] for idx in tgt_idx]
+            cond = sum([1 for x in src+tgt if x]) == len(tgt+src)
+            src = [float(x) if x else np.NaN for x in src]
+            tgt = [float(x) if x else np.NaN for x in tgt]
+            new_line = [cond*1]+tgt+src
+            new_data.append(new_line)
+        return np.array(new_data)
+
+ 
