@@ -39,6 +39,11 @@ class Settings:
         self.output_dim        = None 
         self.cmd_dim           = None 
         self.timestamp_idx     = None 
+        self.continuity_idx    = None 
+        # CSV reader
+        self.use_csv_reader = None 
+        self.source_header  = None 
+        self.target_header  = None 
         # Training settings
         self.batch_size     = None 
         self.max_iterations = None 
@@ -86,6 +91,11 @@ class Settings:
         parser.add_argument('--input_dim', type=int, default='5', help='size of the input sample: using x,y,z coordinates as a data-point means input_dim = 3.')
         parser.add_argument('--output_dim', type=int, default='3', help='size of the sample to predict: predicting x, y, z velocities means output_dim = 3.')
         parser.add_argument('--timestamp_idx', type=int, required=False, help='Index of the timestamp if present in the data')
+        parser.add_argument('--continuity_idx', type=int, required=False, help='Index of the continuity bit if present in the data')
+        # CSV reader
+        parser.add_argument('--use_csv_reader', type=bool, default=False, help='Set to True to use the CSV mode of the reader. Using it requires providing the source_header and target_header arguments.')
+        parser.add_argument('--source_header', type=str, required=False, help='A list with the name of the desired variables to be used as input of the network.')
+        parser.add_argument('--target_header', type=str, required=False, help='A list with the name of the desired variables to be used as output of the network.')
         # Training settings 
         parser.add_argument('--batch_size', type=int, default='32', help='size of the batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
@@ -133,6 +143,11 @@ class Settings:
         self.output_dim        = args.output_dim
         self.cmd_dim           = args.input_dim - args.output_dim
         self.timestamp_idx     = args.timestamp_idx
+        self.continuity_idx    = args.continuity_idx
+        # CSV reader
+        self.use_csv_reader = args.use_csv_reader
+        self.source_header  = args.source_header
+        self.target_header  = args.target_header
         # Training settings
         self.batch_size     = args.batch_size
         self.max_iterations = args.max_iterations
@@ -181,6 +196,13 @@ class Settings:
                 raise("The validation index cannot be higher than the number of folds (indexing starts at 0 in python)")
             if self.folds < self.test_idx:
                 raise("The test index cannot be higher than the number of folds (indexing starts at 0 in python)")
+
+    def check_CSV_reader(self):
+        if self.use_csv_reader:
+            if not self.source_header:
+                raise("source_header argument not set, set the argument and try again.")
+            if not self.target_header:
+                raise("target_header argument not set, set the argument and try again.")
 
     def run(self):
         args = self.arg_parser()
