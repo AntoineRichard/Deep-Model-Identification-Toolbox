@@ -71,17 +71,18 @@ class Settings:
         parser.add_argument('--allow_tb', type=bool, default=True, help='path to the tensorboard directory')
         # Cross-Validation
         parser.add_argument('--use_cross_valid', type=bool, default=False, help='The ratio of data allocated for validation')
-        parser.add_argument('--test_ratio', type=float, required=False, default='0.2', help='The ratio of data allocated to testing, if only providing one training set')
-        parser.add_argument('--val_ratio', type=float, required=False, default='0.1', help='The ratio of data allocated for validation')
-        parser.add_argument('--folds', type=int, required=False, default='5', help='The number of fold to perform during cross validation')
-        parser.add_argument('--val_idx', type=int, required=False, default='0', help='The index of the validation fold')
-        parser.add_argument('--test_idx', type=int, required=False, default='0', help='The index of the test fold')
+        parser.add_argument('--test_ratio', type=float, required=False, help='The ratio of data allocated to testing, if only providing one training set')
+        parser.add_argument('--val_ratio', type=float, required=False, help='The ratio of data allocated for validation')
+        parser.add_argument('--folds', type=int, required=False, help='The number of fold to perform during cross validation, standard value: 5.')
+        parser.add_argument('--val_idx', type=int, required=False, help='The index of the validation fold')
+        parser.add_argument('--test_idx', type=int, required=False, help='The index of the test fold')
         # Priorization settings
         parser.add_argument('--priorization', type=str, default='uniform', help='chose between the different type of optimization. uniform, PER or grad.')
         # PER settings
-        parser.add_argument('--alpha', type=float, required=False, default='0.8', help='alpha parameter as in PER by Schaul')
-        parser.add_argument('--beta', type=float, required=False, default='0.3', help='beta parameter as in PER by Schaul.')
-        parser.add_argument('--epsilon', type=float, required=False, default='0.0000001', help='epsilon as in PER by Schaul.')
+        parser.add_argument('--alpha', type=float, required=False, help='Alpha parameter as in PER by Schaul. (a value between 0 and 1)')
+        parser.add_argument('--beta', type=float, required=False, help='Beta parameter as in PER by Schaul. (a value between 0 and 1)')
+        parser.add_argument('--epsilon', type=float, required=False, help='Epsilon as in PER by Schaul.')
+        parser.add_argument('--per_refresh_rate', type=int, required=False, help='Amount of steps after which the priorization weights have to be refreshed.')
         # Grad settings
         parser.add_argument('--superbatch_size', type=int, required=False, default='256', help='size of the super batch if using gradient upper-bound priorization scheme')
         # Data settings
@@ -94,8 +95,8 @@ class Settings:
         parser.add_argument('--continuity_idx', type=int, required=False, help='Index of the continuity bit if present in the data')
         # CSV reader
         parser.add_argument('--use_csv_reader', type=bool, default=False, help='Set to True to use the CSV mode of the reader. Using it requires providing the source_header and target_header arguments.')
-        parser.add_argument('--source_header', type=str, required=False, help='A list with the name of the desired variables to be used as input of the network.')
-        parser.add_argument('--target_header', type=str, required=False, help='A list with the name of the desired variables to be used as output of the network.')
+        parser.add_argument('--source_header', nargs='+', type=str, required=False, help='A list with the name of the desired variables to be used as input of the network.')
+        parser.add_argument('--target_header', nargs='+', type=str, required=False, help='A list with the name of the desired variables to be used as output of the network.')
         # Training settings 
         parser.add_argument('--batch_size', type=int, default='32', help='size of the batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
@@ -171,11 +172,11 @@ class Settings:
     def check_and_generate_directories(self):
         # Check directories
         if not os.path.isdir(self.train_dir):
-            raise('Cannot find directory ', self.train_dir)
+            raise ValueError('Cannot find directory ', self.train_dir)
         if (self.test_dir is not None) and (not os.path.isdir(self.test_dir)):
-            raise('Cannot find directory ', self.test_dir)
+            raise ValueError('Cannot find directory ', self.test_dir)
         if (self.val_dir is not None) and (not os.path.isdir(self.val_dir)):
-            raise('Cannot find directory ', self.val_dir)
+            raise ValueError('Cannot find directory ', self.val_dir)
         # Generates directories
         try:
             os.mkdir(self.output_dir)
@@ -193,16 +194,16 @@ class Settings:
     def check_X_val(self):
         if self.use_X_val:
             if self.folds < self.val_idx:
-                raise("The validation index cannot be higher than the number of folds (indexing starts at 0 in python)")
+                raise ValueError("The validation index cannot be higher than the number of folds (indexing starts at 0 in python)")
             if self.folds < self.test_idx:
-                raise("The test index cannot be higher than the number of folds (indexing starts at 0 in python)")
+                raise ValueError("The test index cannot be higher than the number of folds (indexing starts at 0 in python)")
 
     def check_CSV_reader(self):
         if self.use_csv_reader:
             if not self.source_header:
-                raise("source_header argument not set, set the argument and try again.")
+                raise ValueError("source_header argument not set, set the argument and try again.")
             if not self.target_header:
-                raise("target_header argument not set, set the argument and try again.")
+                raise ValueError("target_header argument not set, set the argument and try again.")
 
     def run(self):
         args = self.arg_parser()
