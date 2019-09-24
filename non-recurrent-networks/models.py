@@ -59,7 +59,7 @@ class GraphMLP_dX:
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
         self.acc_op = accuracy(self.diff)
-        self.train_step = train_fn(self.w_loss, self.settings.learning_rate)
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
@@ -98,7 +98,7 @@ class GraphCNN_kXcX_pX_dX:
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
         self.acc_op = accuracy(self.diff)
-        self.train_step = train_fn(self.w_loss, self.settings.learning_rate)
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
 

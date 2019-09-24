@@ -127,8 +127,20 @@ class H5Reader:
         # x is a sequence
         # y is the data-point or a sequence right after the sequence used as input
         for i in range(x.shape[0]-1-self.sts.sequence_length-self.sts.forecast):
-            nX.append(x[i:i+self.sts.sequence_length])
-            nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
+            # First check continuity of the sequence if the flag is enabled
+            if not (self.sts.continuity_idx is None):
+                # 1 sequence is continuous 0 otherwise.
+                vx = x[i:i+self.sts.sequence_length, self.sts.continuity_idx]
+                vy = y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, self.sts.continuity_idx]
+                # Check sequence is fine, if not skip sequence.
+                if ((np.sum(vx) != vx.shape[0]) or (np.sum(vy) != vy.shape[0])):
+                    continue
+                else:
+                    nX.append(x[i:i+self.sts.sequence_length,[xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]])
+                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, [xx for xx in range(y.shape[1]) if xx!=self.sts.continuity_idx]])
+            else:
+                nX.append(x[i:i+self.sts.sequence_length])
+                nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
@@ -139,8 +151,20 @@ class H5Reader:
         # x is a sequence
         # y is a sequence right after the sequence used as input
         for i in range(x.shape[0]-1-self.sts.sequence_length-self.sts.trajectory_length):
-            nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
-            nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
+            # First check continuity of the sequence if the flag is enabled
+            if not (self.sts.continuity_idx is None):
+                # 1 sequence is continuous 0 otherwise.
+                vx = x[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                vy = y[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                # Check sequence is fine, if not skip sequence.
+                if ((np.sum(vx) != vx.shape[0]) or (np.sum(vy) != vy.shape[0])):
+                    continue
+                else:
+                    nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length,[xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]])
+                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, [xx for xx in range(y.shape[1]) if xx!=self.sts.continuity_idx]])
+            else:
+                nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
+                nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
@@ -172,12 +196,12 @@ class H5Reader:
         self.test_traj_size = self.test_traj_x.shape[0]
         self.val_traj_size = self.val_traj_x.shape[0]
 
-class CSVReader(H5Reader):
+class VolcaniReader_Forecast(H5Reader):
     def __init__(self, settings):
-        super(CSVReader, self).__init__(settings)
+        super(VolcaniReader_Forecast, self).__init__(settings)
         
     def read_file(self, path):
-        with open("../data/datasets/EC data/Tomato_2019_Gadot/Tomato_2019_Gadot.csv") as f:
+        with open(path) as f:
             readCSV = csv.reader(f, delimiter=',')
             content = []
             for x in readCSV:
@@ -214,4 +238,70 @@ class CSVReader(H5Reader):
             new_data.append(new_line)
         return np.array(new_data)
 
- 
+    def split_input_output(self, xy):
+        x1 = np.expand_dims(xy[:,0],axis=1)
+        x2 = xy[:,self.sts.output_dim+1:]
+        x = np.concatenate((x1,x2),axis=1)
+        y = xy[:,:self.sts.output_dim+1]
+        return x, y
+    
+    def norm_state(self, x):
+        x[:,:,0] = x[:,:,0]/24.0
+        x[:,:,1:] = (x[:,:,1:] - self.mean[self.sts.output_dim+1:]) / self.std[self.sts.output_dim+1:]
+        return x
+    
+    def norm_pred(self, y):
+        return (y - self.mean[:self.sts.output_dim]) / self.std[:self.sts.output_dim]
+
+    def normalize(self, train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y):
+        mean_x = np.mean(np.mean(train_x, axis=0), axis=0)
+        std_x = np.mean(np.std(train_x, axis=0), axis=0)
+        #print(mean_x.shape)
+        #print(std_x.shape)
+        mean_y = np.mean(np.mean(train_y, axis=0), axis=0)
+        std_y = np.mean(np.std(train_y, axis=0), axis=0)
+        #print(mean_y.shape)
+        #print(std_y.shape)
+        self.mean = np.concatenate((mean_y,mean_x),axis=0)
+        self.std = np.concatenate((std_y,std_x),axis=0)
+
+        self.train_x     = self.norm_state(train_x)
+        self.test_x      = self.norm_state(test_x)     
+        self.val_x       = self.norm_state(val_x)      
+        self.test_traj_x = self.norm_state(test_traj_x)
+        self.val_traj_x  = self.norm_state(val_traj_x) 
+
+        self.train_y     = self.norm_pred(train_y)    
+        self.test_y      = self.norm_pred(test_y)     
+        self.val_y       = self.norm_pred(val_y)      
+        self.test_traj_y = self.norm_pred(test_traj_y)
+        self.val_traj_y  = self.norm_pred(val_traj_y)
+    
+    def load_data(self):
+        # Load each dataset
+        train_x, train_y, traj_x, traj_y = self.load(self.sts.train_dir)
+        if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
+            if self.sts.use_X_val:
+                raise('Cannot use cross-validation with separated directory for training validation and testing.')
+            else:
+                test_x, test_y, test_traj_x, test_traj_y = self.load(self.sts.test_dir)
+                val_x, val_y, val_traj_x, val_traj_y = self.load(self.sts.val_dir)
+        elif (self.sts.test_dir is None) and (self.sts.val_dir is not None):
+            test_x, test_y, test_traj_x, test_traj_y = self.load(self.sts.val_dir)
+            val_x, val_y, val_traj_x, val_traj_y = self.load(self.sts.val_dir)
+        elif (self.sts.val_dir is None) and (self.sts.test_dir is not None):
+            test_x, test_y, test_traj_x, test_traj_y = self.load(self.sts.test_dir)
+            val_x, val_y, val_traj_x, val_traj_y = self.load(self.sts.test_dir)
+        elif self.sts.use_X_val:
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.cross_validation_split(train_x, train_y, traj_x, traj_y)
+        else:
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y)
+
+        # normalize all dataset based on the train-set
+        self.normalize(train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y)
+        # get sizes
+        self.train_size = self.train_x.shape[0]
+        self.test_size = self.test_x.shape[0]
+        self.val_size = self.val_x.shape[0]
+        self.test_traj_size = self.test_traj_x.shape[0]
+        self.val_traj_size = self.val_traj_x.shape[0]
