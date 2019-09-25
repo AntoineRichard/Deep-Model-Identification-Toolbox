@@ -1,4 +1,4 @@
-# Non-Recurrent-networks models
+# Non-Recurrent-networks model
 
 ## Model list:
 ### MLP Models
