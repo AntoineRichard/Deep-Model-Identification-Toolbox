@@ -40,7 +40,8 @@ class Settings:
         self.cmd_dim           = None 
         self.timestamp_idx     = None 
         self.continuity_idx    = None 
-        # CSV reader
+        # Reader
+        self.reader_style   = None
         self.use_csv_reader = None 
         self.source_header  = None 
         self.target_header  = None 
@@ -93,7 +94,8 @@ class Settings:
         parser.add_argument('--output_dim', type=int, default='3', help='size of the sample to predict: predicting x, y, z velocities means output_dim = 3.')
         parser.add_argument('--timestamp_idx', type=int, required=False, help='Index of the timestamp if present in the data')
         parser.add_argument('--continuity_idx', type=int, required=False, help='Index of the continuity bit if present in the data')
-        # CSV reader
+        # Reader
+        parser.add_argument('--reader_style', type=str, default='classic', help='Chose the reader you want to use')
         parser.add_argument('--use_csv_reader', type=bool, default=False, help='Set to True to use the CSV mode of the reader. Using it requires providing the source_header and target_header arguments.')
         parser.add_argument('--source_header', nargs='+', type=str, required=False, help='A list with the name of the desired variables to be used as input of the network.')
         parser.add_argument('--target_header', nargs='+', type=str, required=False, help='A list with the name of the desired variables to be used as output of the network.')
@@ -145,7 +147,8 @@ class Settings:
         self.cmd_dim           = args.input_dim - args.output_dim
         self.timestamp_idx     = args.timestamp_idx
         self.continuity_idx    = args.continuity_idx
-        # CSV reader
+        # Reader
+        self.reader_style   = args.reader_style
         self.use_csv_reader = args.use_csv_reader
         self.source_header  = args.source_header
         self.target_header  = args.target_header

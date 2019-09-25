@@ -11,7 +11,6 @@ def get_graph(settings):
         elif name[1] == 'SIGMOID':
             activation = tf.nn.sigmoid
         elif name[1] == 'LRELU':
-            print('using LEAKY RELU')
             activation = tf.nn.leaky_relu
         else:
             raise('error: unknown activation function')
@@ -27,7 +26,6 @@ def get_graph(settings):
         elif name[1] == 'SIGMOID':
             activation = tf.nn.sigmoid
         elif name[1] == 'LRELU':
-            print('using LEAKY RELU')
             activation = tf.nn.leaky_relu
         else:
             raise('error: unknown activation function')
@@ -45,6 +43,38 @@ def get_graph(settings):
                 layer_type.append('dense')
                 layer_param.append(int(di[1:]))
         return models.GraphCNN_kXcX_pX_dX(settings, layer_type, layer_param, act=activation)
+    elif name[0] == 'ATTNSP':
+        if name[1] == 'RELU':
+            activation = tf.nn.relu
+        elif name[1] == 'TANH':
+            activation = tf.nn.tanh
+        elif name[1] == 'SIGMOID':
+            activation = tf.nn.sigmoid
+        elif name[1] == 'LRELU':
+            activation = tf.nn.leaky_relu
+        else:
+            raise('error: unknown activation function')
+        d_model = int(name[2])
+        ff = int(name[3])
+        d = name[4:]
+        d = [int(x) for x in d]
+        return models.GraphATTNSP_dmodel_ff_dX(settings, d_model, ff, d)
+    elif name[0] == 'ATTNMP':
+        if name[1] == 'RELU':
+            activation = tf.nn.relu
+        elif name[1] == 'TANH':
+            activation = tf.nn.tanh
+        elif name[1] == 'SIGMOID':
+            activation = tf.nn.sigmoid
+        elif name[1] == 'LRELU':
+            activation = tf.nn.leaky_relu
+        else:
+            raise('error: unknown activation function')
+        d_model = int(name[2])
+        ff = int(name[3])
+        d = name[4:]
+        d = [int(x) for x in d]
+        return models.GraphATTNMP_dmodel_ff_dX(settings, d_model, ff, d)
 
     else:
-        raise('error unknown model type')
+        raise Exception('error unknown model type')

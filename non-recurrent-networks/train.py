@@ -36,7 +36,10 @@ class UniformTraining:
         self.train()
 
     def load_dataset(self):
-        self.DS = readers.H5Reader(self.sts)
+        if self.sts.reader_style=='lstm':
+            self.DS = readers.H5Reader_4LSTM(self.sts)
+        else:
+            self.DS = readers.H5Reader(self.sts)
 
     def load_sampler(self):
         #TODO integrate setting object in sampler

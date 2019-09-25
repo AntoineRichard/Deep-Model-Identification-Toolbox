@@ -196,6 +196,60 @@ class H5Reader:
         self.test_traj_size = self.test_traj_x.shape[0]
         self.val_traj_size = self.val_traj_x.shape[0]
 
+class H5Reader_4LSTM(H5Reader):
+    def __init__(self, settings):
+        super(H5Reader_4LSTM, self).__init__(settings)
+
+    def sequence_generator(self, x, y):
+        nX = []
+        nY = []
+        # x is a sequence
+        # y is the data-point or a sequence right after the sequence used as input
+        for i in range(x.shape[0]-1-self.sts.sequence_length-self.sts.forecast):
+            # First check continuity of the sequence if the flag is enabled
+            if not (self.sts.continuity_idx is None):
+                # 1 sequence is continuous 0 otherwise.
+                vx = x[i:i+self.sts.sequence_length, self.sts.continuity_idx]
+                vy = y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, self.sts.continuity_idx]
+                # Check sequence is fine, if not skip sequence.
+                if ((np.sum(vx) != vx.shape[0]) or (np.sum(vy) != vy.shape[0])):
+                    continue
+                else:
+                    nX.append(x[i:i+self.sts.sequence_length,[xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]])
+                    nY.append(y[i+1:i+1+self.sts.sequence_length, [xx for xx in range(y.shape[1]) if xx!=self.sts.continuity_idx]])
+            else:
+                nX.append(x[i:i+self.sts.sequence_length])
+                nY.append(y[i+1:i+1+self.sts.sequence_length])
+        nx = np.array(nX)
+        ny = np.array(nY)
+        return nx, ny
+    
+    def trajectory_generator(self, x, y):
+        nX = []
+        nY = []
+        # x is a sequence
+        # y is a sequence right after the sequence used as input
+        for i in range(x.shape[0]-1-self.sts.sequence_length-self.sts.trajectory_length):
+            # First check continuity of the sequence if the flag is enabled
+            if not (self.sts.continuity_idx is None):
+                # 1 sequence is continuous 0 otherwise.
+                vx = x[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                vy = y[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                # Check sequence is fine, if not skip sequence.
+                if ((np.sum(vx) != vx.shape[0]) or (np.sum(vy) != vy.shape[0])):
+                    continue
+                else:
+                    nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length,[xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]])
+                    nY.append(y[i+1:i+1+self.sts.trajectory_length+self.sts.sequence_length, [xx for xx in range(y.shape[1]) if xx!=self.sts.continuity_idx]])
+            else:
+                nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
+                nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
+        nx = np.array(nX)
+        ny = np.array(nY)
+        return nx, ny
+
+
+
 class VolcaniReader_Forecast(H5Reader):
     def __init__(self, settings):
         super(VolcaniReader_Forecast, self).__init__(settings)
