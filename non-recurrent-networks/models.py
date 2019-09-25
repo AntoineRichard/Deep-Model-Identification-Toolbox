@@ -3,7 +3,10 @@ import tensorflow as tf
 
 def accuracy(est, gt):
     with tf.variable_scope('accuracy_op'):
+        print(est.shape)
+        print(gt.shape)
         diff = tf.square(tf.subtract(est, gt))
+        print(diff.shape)
         accuracy = tf.reduce_mean(tf.cast(diff, tf.float32),axis = 0)
         tf.summary.scalar('accuracy', tf.reduce_mean(accuracy))
     return accuracy
@@ -51,7 +54,7 @@ class GraphATTNSP_dmodel_ff_dX:
         self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op = accuracy(self.y_, self.y)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -108,9 +111,7 @@ class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
             for i, di in enumerate(d):
                 self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
-        print(self.ys_.shape)
         self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
-        print(self.y_.shape)
         # Loss
         self.diff = tf.square(tf.subtract(self.ys_, self.y))
         self.seq_loss = tf.reduce_mean(self.diff, axis = -1)
@@ -151,9 +152,7 @@ class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
             for i, di in enumerate(d):
                 self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
-        print(self.ys_.shape)
         self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
-        print(self.y_.shape)
         # Loss
         self.diff = tf.square(tf.subtract(self.ys_, self.y))
         self.seq_loss = tf.reduce_mean(self.diff, axis = -1)
@@ -193,7 +192,7 @@ class GraphMLP_dX:
         self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op = accuracy(self.diff)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -232,7 +231,7 @@ class GraphCNN_kXcX_pX_dX:
         self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op = accuracy(self.diff)
+        self.acc_op = accuracy(self.y_,self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
