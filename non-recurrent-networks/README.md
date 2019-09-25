@@ -17,3 +17,5 @@ In the end you can specify a MLP model as follows:
 - --model MLP\_RELU\_32\_32
 - --model MLP\_TANH\_16
 - --model MLP\_LRELU\_64\_128\_16
+
+> Planned upgrade support dropout layer and parametric relu
