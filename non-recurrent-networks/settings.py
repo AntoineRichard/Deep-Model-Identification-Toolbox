@@ -171,6 +171,8 @@ class Settings:
             self.tb_log_name = s.join(self.tb_log_name.split(' '))
             self.tb_log_name = s.join(self.tb_log_name.split('-'))
             self.tb_log_name = s.join(self.tb_log_name.split(':'))
+        else:
+            self.tb_log_name = args.tb_log_name
 
     def check_and_generate_directories(self):
         # Check directories

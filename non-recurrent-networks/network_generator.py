@@ -70,11 +70,29 @@ def get_graph(settings):
             activation = tf.nn.leaky_relu
         else:
             raise('error: unknown activation function')
+        d_model = int(name[3])
+        ff = int(name[4])
+        alpha = float(name[2])
+        print(alpha)
+        d = name[5:]
+        d = [int(x) for x in d]
+        return models.GraphATTNMP_dmodel_ff_dX(settings, d_model, ff, alpha, d)
+    elif name[0] == 'ATTNMPA':
+        if name[1] == 'RELU':
+            activation = tf.nn.relu
+        elif name[1] == 'TANH':
+            activation = tf.nn.tanh
+        elif name[1] == 'SIGMOID':
+            activation = tf.nn.sigmoid
+        elif name[1] == 'LRELU':
+            activation = tf.nn.leaky_relu
+        else:
+            raise('error: unknown activation function')
         d_model = int(name[2])
         ff = int(name[3])
         d = name[4:]
         d = [int(x) for x in d]
-        return models.GraphATTNMP_dmodel_ff_dX(settings, d_model, ff, d)
+        return models.GraphATTNMPA_dmodel_ff_dX(settings, d_model, ff, d)
 
     else:
         raise Exception('error unknown model type')
