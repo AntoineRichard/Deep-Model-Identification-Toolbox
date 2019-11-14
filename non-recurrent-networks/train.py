@@ -124,7 +124,7 @@ class UniformTraining:
         # Return accuracy for console display
         return acc
         
-    def eval_on_validation_multi_step(self, i):
+    def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
         # Multi step performance evaluation on validation set
         predictions = []
         # Sample trajectory batch out of the evaluation set
@@ -146,10 +146,10 @@ class UniformTraining:
             new = np.concatenate((pred, cmd), axis=1)
             new = np.expand_dims(new, axis=1)
             old = full[:,1:,:]
-            full = np.concatenate((new,old), axis=1)
+            full = np.concatenate((old,new), axis=1)
         predictions = np.concatenate(predictions, axis = 1)
         # Compute per variable error
-        error_x = [SK_MSE(predictions[:,:,i], batch_y[:,:-1,i]) for i in range(predictions.shape[-1])]
+        error_x = [SK_MSE(predictions[:,:,k], batch_y[:,:-1,k]) for k in range(predictions.shape[-1])]
         worse = np.max(error_x)
         avg = np.mean(error_x)
         # Update multistep hard-logs
