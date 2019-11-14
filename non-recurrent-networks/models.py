@@ -2,19 +2,15 @@ import numpy as np
 import tensorflow as tf
 
 def accuracy(est, gt):
-    with tf.variable_scope('accuracy_op'):
-        print(est.shape)
-        print(gt.shape)
-        diff = tf.square(tf.subtract(est, gt))
-        print(diff.shape)
+    with tf.name_scope('accuracy_op'):
+        diff = tf.sqrt(tf.square(tf.subtract(est, gt)))
         accuracy = tf.reduce_mean(tf.cast(diff, tf.float32),axis = 0)
         tf.summary.scalar('accuracy', tf.reduce_mean(accuracy))
     return accuracy
 
 def train_fn(loss, learning_rate):
-    tf.summary.scalar('loss', loss)
-    tf.summary.scalar('learning_rate', learning_rate)
-    with tf.variable_scope('train'):
+    with tf.name_scope('train'):
+        tf.summary.scalar('learning_rate', learning_rate)
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
     return train_step
 
@@ -29,6 +25,7 @@ class GraphATTNSP_dmodel_ff_dX:
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
         # Reshape
         mask = self.make_causal_mask(settings.sequence_length)
+        tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
 
         # Embedding
@@ -36,22 +33,25 @@ class GraphATTNSP_dmodel_ff_dX:
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, d_model, settings.sequence_length)
         # Attention Projection
-        with tf.variable_scope('qkv_projection'):
+        with tf.name_scope('qkv_projection'):
             self.QW = tf.layers.dense(self.pcoded, d_model, activation=act, name='q_projection')
             self.KW = tf.layers.dense(self.pcoded, d_model, activation=act, name='k_projection')
             self.VW = tf.layers.dense(self.pcoded, d_model, activation=act, name='v_projection')
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(d_model), mask)
         # FeedForward
-        with tf.variable_scope('feed_forward'):
+        with tf.name_scope('feed_forward'):
             for i, di in enumerate(d):
                 self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
         self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
         # Loss
-        self.diff = tf.square(tf.subtract(self.y_, self.yr))#self.x[:,:,:3]))
-        self.s_loss = tf.reduce_mean(self.diff, axis = 1)
-        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.y_, self.yr))#self.x[:,:,:3]))
+            self.s_loss = tf.reduce_mean(self.diff, axis = 1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
         self.acc_op = accuracy(self.y_, self.yr)
@@ -60,22 +60,23 @@ class GraphATTNSP_dmodel_ff_dX:
         self.merged = tf.summary.merge_all()
 
     def make_causal_mask(self, size):
-        with tf.variable_scope('causal_mask'):
-            return tf.cast(np.tril(np.ones((1,size,size)),k=0),dtype=tf.float32)
+        with tf.name_scope('causal_mask'):
+            return tf.cast(np.tril(np.ones((1,size,size)),k=0)+np.triu(np.ones((1,size,size)),k=1)*1e-9,dtype=tf.float32)
 
 
-    def attention(self, query, key, value, d_k, mask):
-        with tf.variable_scope('attention'):
-            with tf.variable_scope('attention_weights'):
+    def attention(self, query, key, value, d_k, mask, name='attention'):
+        with tf.variable_scope(name):
+            with tf.name_scope('attention_weights'):
                 scores = tf.divide(tf.matmul(query, tf.transpose(key, perm=[0, 2, 1])),tf.math.sqrt(d_k))
-                masked_scores = tf.matmul(mask, scores)
+                masked_scores = tf.multiply(mask, scores)
                 self.p_attn = tf.nn.softmax(masked_scores, axis = -1)
+                tf.summary.image('attn_weights', tf.expand_dims(self.p_attn,-1))
             #if self.dropout is not None:
             #   self.p_attn = dropout(self.p_attn)
             return tf.matmul(self.p_attn, value)
 
-    def positional_encoding(self, x, d_model, max_len=5000):
-        with tf.variable_scope('positional_encoding'):
+    def positional_encoding(self, x, d_model, max_len=5000, name='positional_encoding'):
+        with tf.variable_scope(name):
             encoding = np.zeros([max_len, d_model], np.float32)
             position = np.arange(max_len, dtype=np.float32)[:, np.newaxis]
             div_term = np.exp(np.arange(0,d_model,2, dtype=np.float32) * (-np.log(10000.0)/d_model))
@@ -84,9 +85,9 @@ class GraphATTNSP_dmodel_ff_dX:
             return tf.math.add(x, tf.cast(encoding, dtype=tf.float32), name = 'encoding')
 
 class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
-    def __init__(self, settings, d_model, ff, d, act=tf.nn.relu):
+    def __init__(self, settings, d_model, ff, alpha, d, act=tf.nn.relu):
         # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,settings.input_dim], name='inputs')
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
@@ -100,30 +101,36 @@ class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, d_model, settings.sequence_length)
         # Attention Projection
-        with tf.variable_scope('qkv_projection'):
+        with tf.name_scope('qkv_projection'):
             self.QW = tf.layers.dense(self.pcoded, d_model, activation=act, name='q_projection')
             self.KW = tf.layers.dense(self.pcoded, d_model, activation=act, name='k_projection')
             self.VW = tf.layers.dense(self.pcoded, d_model, activation=act, name='v_projection')
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(d_model), mask)
         # FeedForward
-        with tf.variable_scope('feed_forward'):
+        with tf.name_scope('feed_forward'):
             for i, di in enumerate(d):
                 self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
         self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
         # Loss
-        self.diff = tf.square(tf.subtract(self.ys_, self.y))
-        self.seq_loss = tf.reduce_mean(self.diff, axis = -1)
-        self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
-        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        with tf.name_scope('loss_ops'):
+            a = tf.range(settings.sequence_length,dtype=tf.float32)
+            self.loss_weights = tf.pow(alpha,a)
+            tf.summary.histogram('sequence_weights', self.loss_weights)
+            self.diff = tf.square(tf.subtract(self.ys_, self.y))
+            self.seq_loss = tf.multiply(tf.reduce_mean(self.diff, axis = -1),self.loss_weights)
+            self.s_loss = tf.reduce_mean(self.seq_loss, axis = 1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
         self.acc_op = accuracy(self.y_, self.y[:,-1,:])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
-
+'''
 class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
     def __init__(self, settings, d_model, ff, alpha, d, act=tf.nn.relu):
         # PLACEHOLDERS
@@ -157,10 +164,76 @@ class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
         self.diff = tf.square(tf.subtract(self.ys_, self.y))
         self.seq_loss = tf.reduce_mean(self.diff, axis = -1)
         self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
-        #self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
         a = tf.pow(tf.divide(tf.range(settings.sequence_length,dtype=tf.float32),settings.sequence_length),alpha)
         weights = tf.divide(a,tf.reduce_max(a))
         self.w_loss = tf.reduce_mean(tf.multiply(self.seq_loss, weights))
+        # Train
+        self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
+        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
+'''
+class GraphATTNMPMH_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
+    def __init__(self, settings, d_model, ff, alpha, d, act=tf.nn.relu):
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+        # Reshape
+        state = self.x[:,:,:settings.input_dim]
+        cmd = self.x[:,:,-settings.cmd_dim:]
+        mask = self.make_causal_mask(settings.sequence_length)
+        tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
+
+        # Embedding
+        self.embbed_state = tf.layers.dense(state, d_model, use_bias=False, activation=None, name='state_embedding')
+        self.embbed_cmd = tf.layers.dense(cmd, d_model, use_bias=False, activation=None, name='cmd_embedding')
+        # Positional Embedding
+        self.pcoded_state = self.positional_encoding(self.embbed_state, d_model, settings.sequence_length, name='state_positional_embedding')
+        self.pcoded_cmd = self.positional_encoding(self.embbed_cmd, d_model, settings.sequence_length, name='cmd_positional_embedding')
+        # Attention Projection
+        with tf.name_scope('state_qkv_projection'):
+            self.SQW = tf.layers.dense(self.pcoded_state, d_model, activation=act, name='state_q_projection')
+            self.SKW = tf.layers.dense(self.pcoded_state, d_model, activation=act, name='state_k_projection')
+            self.SVW = tf.layers.dense(self.pcoded_state, d_model, activation=act, name='state_v_projection')
+        with tf.name_scope('cmd_qkv_projection'):
+            self.CQW = tf.layers.dense(self.pcoded_cmd, d_model, activation=act, name='cmd_q_projection')
+            self.CKW = tf.layers.dense(self.pcoded_cmd, d_model, activation=act, name='cmd_k_projection')
+            self.CVW = tf.layers.dense(self.pcoded_cmd, d_model, activation=act, name='cmd_v_projection')
+        # Attention mechanism
+        self.state_attn = self.attention(self.SQW, self.SKW, self.SVW, float(d_model), mask, name='state_attn')
+        self.cmd_attn = self.attention(self.CQW, self.CKW, self.CVW, float(d_model), mask, name='cmd_attn')
+        self.concat = tf.concat([self.state_attn, self.cmd_attn], axis=-1)
+        self.pcoded_fusion = self.positional_encoding(self.concat, d_model*2, settings.sequence_length, name='fusion_positional_embedding')
+        with tf.name_scope('fuse_qkv_projection'):
+            self.FQW = tf.layers.dense(self.pcoded_fusion, d_model, activation=act, name='fuse_q_projection')
+            self.FKW = tf.layers.dense(self.pcoded_fusion, d_model, activation=act, name='fuse_k_projection')
+            self.FVW = tf.layers.dense(self.pcoded_fusion, d_model, activation=act, name='fuse_v_projection')
+        self.xr = self.attention(self.FQW, self.FKW, self.FVW, float(d_model), mask, name='fused_attn')
+        #self.xr = tf.add(self.state_attn, self.cmd_attn)
+        #print(self.xr.shape)
+
+        # FeedForward
+        with tf.name_scope('feed_forward'):
+            for i, di in enumerate(d):
+                self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
+        self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
+        self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
+        # Loss
+        with tf.name_scope('loss_ops'):
+            a = tf.range(settings.sequence_length,dtype=tf.float32)
+            self.loss_weights = tf.pow(alpha,a)
+            tf.summary.histogram('sequence_weights', self.loss_weights)
+            self.diff = tf.square(tf.subtract(self.ys_, self.y))
+            self.seq_loss = tf.multiply(tf.reduce_mean(self.diff, axis = -1),self.loss_weights)
+            self.s_loss = tf.reduce_mean(self.seq_loss, axis = 1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
         self.acc_op = accuracy(self.y_, self.y[:,-1,:])
@@ -185,24 +258,26 @@ class GraphATTNMPA_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, d_model, settings.sequence_length)
         # Attention Projection
-        with tf.variable_scope('qkv_projection'):
+        with tf.name_scope('qkv_projection'):
             self.QW = tf.layers.dense(self.pcoded, d_model, activation=act, name='q_projection')
             self.KW = tf.layers.dense(self.pcoded, d_model, activation=act, name='k_projection')
             self.VW = tf.layers.dense(self.pcoded, d_model, activation=act, name='v_projection')
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(d_model), mask)
         # FeedForward
-        with tf.variable_scope('feed_forward'):
+        with tf.name_scope('feed_forward'):
             for i, di in enumerate(d):
                 self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.reg = tf.add(self.xr, self.pcoded)
         self.ys_ = tf.layers.dense(self.reg, settings.output_dim, activation=None, name='output_full_dim')
         self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
         # Loss
-        self.diff = tf.square(tf.subtract(self.ys_, self.y))
-        self.seq_loss = tf.reduce_mean(self.diff, axis = -1)
-        self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
-        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.ys_, self.y))
+            self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
         self.acc_op = accuracy(self.y_, self.y[:,-1,:])
@@ -227,24 +302,26 @@ class GraphATTNMPAR_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, d_model, settings.sequence_length)
         # Attention Projection
-        with tf.variable_scope('qkv_projection'):
+        with tf.name_scope('qkv_projection'):
             self.QW = tf.layers.dense(self.pcoded, d_model, activation=act, name='q_projection')
             self.KW = tf.layers.dense(self.pcoded, d_model, activation=act, name='k_projection')
             self.VW = tf.layers.dense(self.pcoded, d_model, activation=act, name='v_projection')
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(d_model), mask)
         # FeedForward
-        with tf.variable_scope('feed_forward'):
+        with tf.name_scope('feed_forward'):
             for i, di in enumerate(d):
                 self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.reg = tf.add(self.xr, self.pcoded)
         self.ys_ = tf.layers.dense(self.reg, settings.output_dim, activation=None, name='output_full_dim')
         self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
         # Loss
-        self.diff = tf.square(tf.subtract(self.ys_, self.y))
-        self.seq_loss = tf.reduce_mean(self.diff, axis = -1)
-        self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
-        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.ys_, self.y))
+            self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
         self.acc_op = accuracy(self.y_, self.y[:,-1,:])
@@ -271,9 +348,75 @@ class GraphMLP_dX:
             self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
         self.y_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output')
         # Loss
-        self.diff = tf.square(tf.subtract(self.y_, self.yr))
-        self.s_loss = tf.reduce_mean(self.diff, axis=1)
-        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.y_, self.yr))
+            self.s_loss = tf.reduce_mean(self.diff, axis=1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
+        # Train
+        self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.y_, self.yr)
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
+
+class GraphMLP_CPLX_dX:
+    def __init__(self, settings, d, act=tf.nn.relu):
+
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+
+        # Embed
+        self.xe = tf.complex(self.x,self.x)
+        # Reshape
+        self.xr = tf.reshape(self.xe, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
+        self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
+        # Operations
+        for i, di in enumerate(d):
+            with tf.name_scope('dense_'+str(i)):
+                with tf.name_scope('Complex_Kernel'):
+                    wr = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), di)))
+                    wi = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), di)))
+                    weight_matrix = tf.complex(wr,wi)
+                with tf.name_scope('Complex_Bias'):
+                    br = tf.Variable(tf.zeros_initializer()(di))
+                    bi = tf.Variable(tf.zeros_initializer()(di))
+                    bias = tf.complex(br,bi)
+                with tf.name_scope('MatMul'):
+                    matmul = tf.matmul(self.xr,weight_matrix)
+                with tf.name_scope('BiasAdd'):
+                    biasadd = matmul + bias
+                with tf.name_scope('Activation'):
+                    self.xr = tf.tanh(biasadd)
+        with tf.name_scope('Complex_Kernel'):
+            wr = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), settings.output_dim)))
+            wi = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), settings.output_dim)))
+            weight_matrix = tf.complex(wr,wi)
+        with tf.name_scope('Complex_Bias'):
+            br = tf.Variable(tf.zeros_initializer()(settings.output_dim))
+            bi = tf.Variable(tf.zeros_initializer()(settings.output_dim))
+            bias = tf.complex(br,bi)
+        with tf.name_scope('MatMul'):
+            matmul = tf.matmul(self.xr,weight_matrix)
+        with tf.name_scope('BiasAdd'):
+            biasadd = matmul + bias
+        with tf.name_scope('Activation'):
+            self.xr = tf.math.real(biasadd)
+
+        self.y_ = tf.layers.dense(self.xr, settings.output_dim,  activation=None, name='output')
+        # Loss
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.y_, self.yr))
+            self.s_loss = tf.reduce_mean(self.diff, axis=1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
         self.acc_op = accuracy(self.y_, self.yr)
@@ -310,9 +453,12 @@ class GraphCNN_kXcX_pX_dX:
         self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
 
         # Loss
-        self.diff = tf.square(tf.subtract(self.y_,self.yr))
-        self.s_loss = tf.reduce_mean(self.diff, axis=1)
-        self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.y_, self.yr))
+            self.s_loss = tf.reduce_mean(self.diff, axis=1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
         self.acc_op = accuracy(self.y_,self.yr)

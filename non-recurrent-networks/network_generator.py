@@ -16,7 +16,23 @@ def get_graph(settings):
             raise('error: unknown activation function')
         d = name[2:]
         d = [int(x) for x in d]
+        print('### USING MLP MODEL ###')
         return models.GraphMLP_dX(settings, d, act=activation)
+    
+    if name[0] == 'MLPCPLX':
+        if name[1] == 'RELU':
+            activation = tf.nn.relu
+        elif name[1] == 'TANH':
+            activation = tf.nn.tanh
+        elif name[1] == 'SIGMOID':
+            activation = tf.nn.sigmoid
+        elif name[1] == 'LRELU':
+            activation = tf.nn.leaky_relu
+        else:
+            raise('error: unknown activation function')
+        d = name[2:]
+        d = [int(x) for x in d]
+        return models.GraphMLP_CPLX_dX(settings, d, act=activation)
 
     elif name[0] == 'CNN':
         if name[1] == 'RELU':
@@ -93,6 +109,24 @@ def get_graph(settings):
         d = name[4:]
         d = [int(x) for x in d]
         return models.GraphATTNMPA_dmodel_ff_dX(settings, d_model, ff, d)
+    elif name[0] == 'ATTNMPMH':
+        if name[1] == 'RELU':
+            activation = tf.nn.relu
+        elif name[1] == 'TANH':
+            activation = tf.nn.tanh
+        elif name[1] == 'SIGMOID':
+            activation = tf.nn.sigmoid
+        elif name[1] == 'LRELU':
+            activation = tf.nn.leaky_relu
+        else:
+            raise('error: unknown activation function')
+        d_model = int(name[3])
+        ff = int(name[4])
+        alpha = float(name[2])
+        print(alpha)
+        d = name[5:]
+        d = [int(x) for x in d]
+        return models.GraphATTNMPMH_dmodel_ff_dX(settings, d_model, ff, alpha, d)
 
     else:
         raise Exception('error unknown model type')
