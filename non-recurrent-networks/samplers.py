@@ -43,7 +43,7 @@ class UniformSampler:
         max_iter = x.shape[0]
         # Yield based loop: Generator
         for i in range(max_iter):
-            yield [i*1./max_iter, x[i],y[i]]
+            yield [i*1./max_iter, x[i], y[i]]
 
     def shuffle(self, x, y):
         s = np.arange(x.shape[0])
@@ -187,3 +187,87 @@ class GRADSampler(UniformSampler):
         probs = p[0][ids]*superbatch_size
         return idxs, 1./probs
 
+
+class GapSampler(UniformSampler):
+    def __init__(self, dataset, settings):
+        super(GapSampler, self).__init__(dataset)
+    
+    def sample(self, x, y, batch_size):
+        """
+        Sample function: Create a sampler object that lasts
+        for an epoch. After that it needs to be refreshed (python2)
+        or regerated (python3).
+        Usage:
+          Create object: sampler = self.sample(x,y,bs)
+          Request next batch: iteration, bx, by = next(sampler)
+          Refresh object: Re-create the object.
+          A try catch loop makes this process more convenient.
+
+        Input:
+            x:  the full input dataset 
+            y:  the full target dataset
+            bs: the desired size of the outputed batches
+        Output:
+            A generator object (see usage)
+        """
+        # Shuffle
+        s = np.arange(x.shape[0])
+        np.random.shuffle(s)
+        x = x[s].copy()
+        y = y[s].copy()
+        # Generates batches
+        X = []
+        Y = []
+        # If batch_size is None then return the whole dataset
+
+        for i in range(int(x.shape[0]/batch_size)):
+            X.append(x[i*batch_size:(i+1)*batch_size,:,:])
+            Y.append(y[i*batch_size:(i+1)*batch_size,:,:])
+        x = np.array(X)
+        y = np.array(Y)
+        max_iter = x.shape[0]
+        # Yield based loop: Generator
+        for i in range(max_iter):
+            xmod = x[i]
+            idx = (16 + np.random.rand(batch_size)*16).astype(int)
+            xmod[0,idx,0] = -1000
+            yield [i*1./max_iter, xmod, y[i]]
+    
+    def sample_eval_train_batch(self, bs):
+        """
+        This function returns the train batch along with the percentage completion
+        of the epoch: epoch_completion, Batch_x, Batch_y.
+        """
+        if bs is None:
+            bs = self.DS.train_x.shape[0]
+        try:
+            return next(self.TBE)
+        except:
+            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, bs)
+            return next(self.TBE)
+     
+    def sample_test_batch(self, bs=None):
+        """
+        This function returns the test batch along with the percentage completion
+        of the epoch: epoch_completion, Batch_x, Batch_y.
+        """
+        if bs is None:
+            bs = self.DS.test_x.shape[0]
+        try:
+            return next(self.TeB)
+        except:
+            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, bs)
+            return next(self.TeB)
+
+    def sample_val_batch(self, bs=None):
+        """
+        This function returns the val batch along with the percentage completion
+        of the epoch: epoch_completion, Batch_x, Batch_y.
+        """
+        if bs is None:
+            bs = self.DS.val_x.shape[0]
+        try:
+            return next(self.TvB)
+        except:
+            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, bs)
+            return next(self.TvB)
