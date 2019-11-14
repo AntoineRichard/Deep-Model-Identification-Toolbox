@@ -458,10 +458,10 @@ class GraphCNN_kXcX_pX_dX:
             self.s_loss = tf.reduce_mean(self.diff, axis=1)
             self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
             tf.summary.scalar('w_loss', self.w_loss)
-            tf.summary.scalar('loss', self.s_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op = accuracy(self.y_,self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
