@@ -210,9 +210,16 @@ class Settings:
             if not self.target_header:
                 raise ValueError("target_header argument not set, set the argument and try again.")
 
+    def check_idxs(self):
+        if self.continuity_idx:
+            if self.continuity_idx > self.timestamp_idx:
+                self.continuity_idx = self.continuity_idx - 1
+
+
     def run(self):
         args = self.arg_parser()
         self.generate_tensorboard_name(args)
         self.assign_args(args)
         self.check_and_generate_directories()
         self.check_X_val()
+        self.check_idxs()
