@@ -2,7 +2,17 @@ import numpy as np
 
 class UniformSampler:
     """
-    A uniform sampler based on shuffling and epochs.
+    An epoch based uniform sampler. This object is based on python's generators. 
+    It keeps in memory 4 generator objects:
+      + The generator for the training steps
+      + The generator for the evaluation of the training
+      + The generator for the evaluation on the validation set
+      + The generator for the evaluation on the test set
+    The sampling function generates the generator, each generator has be be refreshed after
+    each epoch.
+    Since our models will mostly be used for Model Predictive Control we also evaluate them
+    for multistep prediction. To do so we also store 2 other generators that sample
+    trajectories (instead of a single point)
     """
     def __init__(self, Dataset):
         self.DS = Dataset
@@ -25,7 +35,7 @@ class UniformSampler:
         Output:
             A generator object (see usage)
         """
-        # Shuffle
+        # Shuffle the dataset synchronously
         s = np.arange(x.shape[0])
         np.random.shuffle(s)
         x = x[s].copy()
@@ -33,8 +43,6 @@ class UniformSampler:
         # Generates batches
         X = []
         Y = []
-        # If batch_size is None then return the whole dataset
-
         for i in range(int(x.shape[0]/batch_size)):
             X.append(x[i*batch_size:(i+1)*batch_size,:,:])
             Y.append(y[i*batch_size:(i+1)*batch_size,:,:])
@@ -45,16 +53,9 @@ class UniformSampler:
         for i in range(max_iter):
             yield [i*1./max_iter, x[i], y[i]]
 
-    def shuffle(self, x, y):
-        s = np.arange(x.shape[0])
-        np.random.shuffle(s)
-        x = x[s].copy()
-        y = y[s].copy()
-        return 1.0, x, y
-
     def sample_train_batch(self, bs):
         """
-        This function returns the train batch along with the percentage completion
+        This function returns the train batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         try:
@@ -65,7 +66,7 @@ class UniformSampler:
     
     def sample_eval_train_batch(self, bs):
         """
-        This function returns the train batch along with the percentage completion
+        This function returns the train batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         if bs is None:
@@ -78,7 +79,7 @@ class UniformSampler:
      
     def sample_test_batch(self, bs=None):
         """
-        This function returns the test batch along with the percentage completion
+        This function returns the test batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         if bs is None:
@@ -91,7 +92,7 @@ class UniformSampler:
 
     def sample_val_batch(self, bs=None):
         """
-        This function returns the val batch along with the percentage completion
+        This function returns the val batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         if bs is None:
@@ -188,15 +189,20 @@ class GRADSampler(UniformSampler):
         return idxs, 1./probs
 
 
-class GapSampler(UniformSampler):
-    def __init__(self, dataset, settings):
-        super(GapSampler, self).__init__(dataset)
-    
+class LSTMSampler(UniformSampler):
+    """
+    A sampler derived from the Uniform sampler but well suited for continuous time-series
+    LSTMs. (Only the sampling function is modified)
+    """
+    def __init__(self, Dataset):
+        super(LSTMSampler, self).__init__()
+        self.DS = Dataset
+
     def sample(self, x, y, batch_size):
         """
         Sample function: Create a sampler object that lasts
         for an epoch. After that it needs to be refreshed (python2)
-        or regerated (python3).
+        or regenerated (python3).
         Usage:
           Create object: sampler = self.sample(x,y,bs)
           Request next batch: iteration, bx, by = next(sampler)
@@ -210,7 +216,9 @@ class GapSampler(UniformSampler):
         Output:
             A generator object (see usage)
         """
-        # Shuffle
+        # Prepares the data to suits the LSTMs requirements
+        
+        # roll the data (instead of shuffling)
         s = np.arange(x.shape[0])
         np.random.shuffle(s)
         x = x[s].copy()
@@ -218,8 +226,6 @@ class GapSampler(UniformSampler):
         # Generates batches
         X = []
         Y = []
-        # If batch_size is None then return the whole dataset
-
         for i in range(int(x.shape[0]/batch_size)):
             X.append(x[i*batch_size:(i+1)*batch_size,:,:])
             Y.append(y[i*batch_size:(i+1)*batch_size,:,:])
@@ -228,46 +234,4 @@ class GapSampler(UniformSampler):
         max_iter = x.shape[0]
         # Yield based loop: Generator
         for i in range(max_iter):
-            xmod = x[i]
-            idx = (16 + np.random.rand(batch_size)*16).astype(int)
-            xmod[0,idx,0] = -1000
-            yield [i*1./max_iter, xmod, y[i]]
-    
-    def sample_eval_train_batch(self, bs):
-        """
-        This function returns the train batch along with the percentage completion
-        of the epoch: epoch_completion, Batch_x, Batch_y.
-        """
-        if bs is None:
-            bs = self.DS.train_x.shape[0]
-        try:
-            return next(self.TBE)
-        except:
-            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, bs)
-            return next(self.TBE)
-     
-    def sample_test_batch(self, bs=None):
-        """
-        This function returns the test batch along with the percentage completion
-        of the epoch: epoch_completion, Batch_x, Batch_y.
-        """
-        if bs is None:
-            bs = self.DS.test_x.shape[0]
-        try:
-            return next(self.TeB)
-        except:
-            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, bs)
-            return next(self.TeB)
-
-    def sample_val_batch(self, bs=None):
-        """
-        This function returns the val batch along with the percentage completion
-        of the epoch: epoch_completion, Batch_x, Batch_y.
-        """
-        if bs is None:
-            bs = self.DS.val_x.shape[0]
-        try:
-            return next(self.TvB)
-        except:
-            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, bs)
-            return next(self.TvB)
+            yield [i*1./max_iter, x[i], y[i]]

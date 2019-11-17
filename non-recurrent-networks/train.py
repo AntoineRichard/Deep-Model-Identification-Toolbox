@@ -36,8 +36,8 @@ class UniformTraining:
         self.train()
 
     def load_dataset(self):
-        if self.sts.reader_style=='lstm':
-            self.DS = readers.H5Reader_4LSTM(self.sts)
+        if self.sts.reader_style=='seq2seq':
+            self.DS = readers.H5Reader_Seq2Seq(self.sts)
         else:
             self.DS = readers.H5Reader(self.sts)
 

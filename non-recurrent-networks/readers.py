@@ -371,6 +371,16 @@ class H5Reader:
         self.val_traj_size = self.val_traj_x.shape[0]
 
 class H5Reader_Seq2Seq(H5Reader):
+    """
+    A reader object made to be compatible with our datasets formating:
+    Time-stamp, Continuity-bit, States (1 or more), Commands (1 or more)
+    This object prepares the data (Nomalizes, removes time-stamps, and
+    continuity idx), and split it using the settings chosen by the user.
+    Since we aim to apply our models to MPC, our models will be
+    evaluated on multistep predictions (build on their predictions) 
+    hence this reader also generates trajectories. This Reader formats
+    the dataset for seq2seq processing.
+    """
     def __init__(self, settings):
         super(H5Reader_Seq2Seq, self).__init__(settings)
 
@@ -447,3 +457,17 @@ class H5Reader_Seq2Seq(H5Reader):
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
+
+class H5Reader_Seq2Seq_RNN(H5Reader):
+    """
+    A reader object made to be compatible with our datasets formating:
+    Time-stamp, Continuity-bit, States (1 or more), Commands (1 or more)
+    This object prepares the data (Nomalizes, removes time-stamps, and
+    continuity idx), and split it using the settings chosen by the user.
+    Since we aim to apply our models to MPC, our models will be
+    evaluated on multistep predictions (build on their predictions) 
+    hence this reader also generates trajectories. This reader provides
+    support for continuous time RNNs and seq2seq processing.
+    """
+    def __init__(self, settings):
+        super(H5Reader_Seq2Seq_RNN, self).__init__(settings)
