@@ -662,3 +662,70 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
+
+    def augment_seq(self, x, y, continuity, size):
+        xstack = []
+        ystack = []
+        cstack = []
+        idx_to_split = np.argwhere(continuity == False)
+        xl = np.split(x, idx_to_split)
+        yl = np.split(y, idx_to_split)
+        for xy in zip(xl,yl):
+            for i in range(size):
+                # rebuilds the sequence
+                rx = np.reshape(xy[0],[xy[0].shape[0]*xy[0].shape[1],xy[0].shape[2]])
+                ry = np.reshape(xy[1],[xy[1].shape[0]*xy[1].shape[1],xy[1].shape[2]])
+                # roll the sequence and remove the end (rolled over points)
+                rx = np.roll(rx,-i)[:-size]
+                ry = np.roll(ry,-i)[:-size]
+                # reformat into batch
+                rx = reshape(rx,[-1,size,self.sts.input_dim])
+                ry = reshape(ry,[-1,size,self.sts.output_dim])
+                xstack.append(rx)
+                ystack.append(ry)
+                rc = np.ones(rx.shape[0], dtype=np.int) == 1
+                rc[0] = False
+                cstack.append(rc)
+
+        nx = np.concatenate(xstack,axis = 0)
+        ny = np.concatenate(ystack,axis = 0)
+        nc = np.concatenate(cstack,axis = 0)
+        return nx, ny, nc
+
+
+    
+    def load_data(self):
+        """
+        Build the dataset and splits it based on user input
+        """
+        # Load each dataset
+        train_x, train_y, traj_x, traj_y = self.load(self.sts.train_dir)
+        if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
+            if self.sts.use_X_val:
+                raise('Cannot use cross-validation with separated directory for training validation and testing.')
+            else:
+                test_x, test_y, test_traj_x, test_traj_y = self.load(self.sts.test_dir)
+                val_x, val_y, val_traj_x, val_traj_y = self.load(self.sts.val_dir)
+        elif self.sts.test_dir is None and self.sts.val_dir is not None:
+            raise('Test root was not provided but validation root was, provide none or both.')
+        elif self.sts.val_dir is None and self.sts.test_dir is not None:
+            raise('Validation root was not provided but test root was, provide none or both.')
+        elif self.sts.use_X_val:
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.cross_validation_split(train_x, train_y, traj_x, traj_y)
+        else:
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y)
+        
+        # augment LSTMs data
+        self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
+        self.test_sc, self.test_x, self.test_y = self.augment_seq(test_x, test_y, self.test_sc, self.test_sc, self.sts.sequence_length)
+        self.val_sc, self.val_x, self.val_y = self.augment_seq(val_x, val_y, self.val_sc, self.sts.sequence_length)
+        self.test_tc, self.test_traj_x, self.test_traj_y = self.augment_seq(test_traj_x, test_traj_y, self.test_tc, self.test_sc, self.sts.sequence_length+self.sts.trajectory_length)
+        self.val_tc, self.val_traj_x, self.val_traj_y = self.augment_seq(val_traj_x, val_traj_y, self.val_tc, self.sts.sequence_length+self.sts.trajectory_length)
+        # normalize all dataset based on the train-set
+        self.normalize(train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y)
+        # get sizes
+        self.train_size = self.train_x.shape[0]
+        self.test_size = self.test_x.shape[0]
+        self.val_size = self.val_x.shape[0]
+        self.test_traj_size = self.test_traj_x.shape[0]
+        self.val_traj_size = self.val_traj_x.shape[0]
