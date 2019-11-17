@@ -60,6 +60,9 @@ class Settings:
         self.run()
 
     def arg_parser(self):
+        """
+        Parses the arguments
+        """
         parser = argparse.ArgumentParser()
         # Data and directories
         parser.add_argument('--train_data',type=str, help='path to the train data folder to be used')
@@ -95,10 +98,7 @@ class Settings:
         parser.add_argument('--timestamp_idx', type=int, required=False, help='Index of the timestamp if present in the data')
         parser.add_argument('--continuity_idx', type=int, required=False, help='Index of the continuity bit if present in the data')
         # Reader
-        parser.add_argument('--reader_style', type=str, default='classic', help='Chose the reader you want to use')
-        parser.add_argument('--use_csv_reader', type=bool, default=False, help='Set to True to use the CSV mode of the reader. Using it requires providing the source_header and target_header arguments.')
-        parser.add_argument('--source_header', nargs='+', type=str, required=False, help='A list with the name of the desired variables to be used as input of the network.')
-        parser.add_argument('--target_header', nargs='+', type=str, required=False, help='A list with the name of the desired variables to be used as output of the network.')
+        parser.add_argument('--reader_style', type=str, default='classic', help='Chose the reader you want to use: classic, seq2seq, seq2seq_rnn')
         # Training settings 
         parser.add_argument('--batch_size', type=int, default='32', help='size of the batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
@@ -113,6 +113,9 @@ class Settings:
         return args
 
     def assign_args(self, args):
+        """
+        Assigns the arguments
+        """
         # Data and directories
         self.train_dir   = args.train_data
         self.test_dir    = args.test_data
@@ -149,9 +152,6 @@ class Settings:
         self.continuity_idx    = args.continuity_idx
         # Reader
         self.reader_style   = args.reader_style
-        self.use_csv_reader = args.use_csv_reader
-        self.source_header  = args.source_header
-        self.target_header  = args.target_header
         # Training settings
         self.batch_size     = args.batch_size
         self.max_iterations = args.max_iterations
@@ -164,6 +164,9 @@ class Settings:
         self.path_weight = args.weight_path
 
     def generate_tensorboard_name(self, args):
+        """
+        Set the name of the tensorboard log directory for that run
+        """
         if args.tb_log_name == 'TOD':
             from time import gmtime, strftime
             self.tb_log_name = strftime('%Y-%m-%d %H:%M:%S', gmtime())
@@ -175,6 +178,9 @@ class Settings:
             self.tb_log_name = args.tb_log_name
 
     def check_and_generate_directories(self):
+        """
+        Check that the specified directories match the requirements
+        """
         # Check directories
         if not os.path.isdir(self.train_dir):
             raise ValueError('Cannot find directory ', self.train_dir)
@@ -197,26 +203,30 @@ class Settings:
             pass
 
     def check_X_val(self):
+        """
+        Check that cross validation parameters make sense
+        """
         if self.use_X_val:
             if self.folds < self.val_idx:
                 raise ValueError("The validation index cannot be higher than the number of folds (indexing starts at 0 in python)")
             if self.folds < self.test_idx:
                 raise ValueError("The test index cannot be higher than the number of folds (indexing starts at 0 in python)")
 
-    def check_CSV_reader(self):
-        if self.use_csv_reader:
-            if not self.source_header:
-                raise ValueError("source_header argument not set, set the argument and try again.")
-            if not self.target_header:
-                raise ValueError("target_header argument not set, set the argument and try again.")
-
     def check_idxs(self):
+        """
+        Checks where the continuity_idx seats in the data, if it's after the timestamp_idx
+        then when the timestamp are going to be removed the continuity idx will move of one
+        point to the right. Correct the continuity_idx value accordingly
+        """
         if self.continuity_idx:
             if self.continuity_idx > self.timestamp_idx:
                 self.continuity_idx = self.continuity_idx - 1
 
 
     def run(self):
+        """
+        Loads the args checks path etc...
+        """
         args = self.arg_parser()
         self.generate_tensorboard_name(args)
         self.assign_args(args)
