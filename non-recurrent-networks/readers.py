@@ -471,3 +471,194 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
     """
     def __init__(self, settings):
         super(H5Reader_Seq2Seq_RNN, self).__init__(settings)
+        self.sequence_continuity = []
+        self.trajectory_continuity = []
+    
+    def split_var(self, x, continuity):
+        """
+        Splits the data into a K-fold Cross-Validation form where the number of fold is 
+        ajustable and position of the train the test or the validation set can be changed
+        using indices. The numbers of folds and the index of each set can be set in the
+        settings object.
+        Input:
+            x : the data in the form [N x M] or [N x M x O]
+            continuity: the continuity indicator of x [N]
+        Output:
+            train_x : the training data in the form [N x M] or [N x M x O]
+            test_x  : the test data in the form [N x M] or [N x M x O]
+            val_x   : the validation data in the form [N x M] or [N x M x O]
+            train_c : the continuity indicator of train_x [N]
+            test_c  : the continuity indicator of test_x [N]
+            val_c   : the continuity indicator of val_x [N]
+        """
+        # Cuts the data into folds
+        x = x[:self.sts.folds*(int(x.shape[0]/self.sts.folds))]
+        x_split = np.split(x, self.sts.folds)
+        x = x[:self.sts.folds*(int(x.shape[0]/self.sts.folds))]
+        continuity = continuity[:self.sts.folds*(int(continuity.shape[0]/self.sts.folds))]
+        continuity_split = np.split(continuity, self.sts.folds)
+        # Pick the test
+        test_x = x_split[self.sts.test_idx]
+        test_c = continuity_split[self.sts.test_idx]
+        test_c[0] = False
+        # Fuse and split
+        x = np.concatenate([x_split[i] for i in range(self.sts.folds) if i!=self.sts.test_idx], axis=0)
+        x = x[:self.sts.folds*(int(x.shape[0]/self.sts.folds))]
+        x_split = np.split(x, self.sts.folds)
+        continuity = np.concatenate([continuity_split[i] for i in range(self.sts.folds) if i!=self.sts.test_idx], axis=0)
+        continuity = continuity[:self.sts.folds*(int(continuity.shape[0]/self.sts.folds))]
+        continuity_split = np.split(continuity, self.sts.folds)
+        # Pick val
+        val_x = x_split[self.sts.val_idx]
+        val_c = continuity_split[self.sts.val_idx]
+        val_c[0] = False
+        # Fuse train
+        train_x = np.concatenate([x_split[i] for i in range(self.sts.folds) if i!=self.sts.val_idx], axis=0)
+        train_c[self.sts.val_idx][0] = False
+        train_c = np.concatenate([continuity_split[i] for i in range(self.sts.folds) if i!=self.sts.val_idx], axis=0)
+        train_c[0] = False
+        return train_x, test_x, val_x, train_c, test_c, val_c
+
+    def cross_validation_split(self, x, y, x_traj, y_traj):
+        """
+        Calls the spliting methode related to the K-Fold Cross Validation and applies it to
+        the x, y, x_traj and y_traj
+        Input:
+            x : Generated sequence in the form [N x Sequence_size x Input_dim]
+            y : Generated sequence in the form [N x Forecast_size x Output_dim]
+            x_traj : Generated trajectories in the form [N x Trajectory_size + Sequence_size x Input_size]
+            y_traj : Generated trajectories in the from [N x Trajectory_size x Output_size]
+        Output:
+            train_x : The input training sequences [N x Sequence_size x Input_dim]
+            train_y : The output training sequences [N x Forecast_size x Output_dim]
+            test_x  : The input test sequences [N x Sequence_size x Input_dim]
+            test_y  : The output test sequences [N x Forecast_size x Output_dim]
+            val_x   : The input validation sequences [N x Sequence_size x Input_dim]
+            val_y   : The output validation sequences [N x Forecast_size x Output_dim]
+            test_traj_x : The input test trajectories [N x Trajectory_size + Sequence_size x Input_dim]
+            test_traj_y : The output test trajectories [N x Trajectory_size x Output_dim]
+            val_traj_x  : The input validation trajectories [N x Trajectory_size + Sequence_size x Input_dim]
+            val_traj_y  : The output validation trajectories  [N x Trajectory_size x Output_dim]
+        """
+        train_x, test_x, val_x, self.train_sc, self.test_sc, self.val_sc = self.split_var(x, self.sequence_continuity)
+        train_y, test_y, val_y = self.split_var(y)
+        _, test_traj_x, val_traj_x, _, self.test_c, self.val_c = self.split_var(x_traj, self.trajectory_continuity)
+        _, test_traj_y, val_traj_y = self.split_var(y_traj)
+        return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
+
+    def ratio_based_split(self, x, y, traj_x, traj_y):
+        """
+        Calls the spliting methode related to the ratio based split and applies it to
+        the x, y, x_traj and y_traj
+        Input:
+            x : Generated sequence in the form [N x Sequence_size x Input_dim]
+            y : Generated sequence in the form [N x Forecast_size x Output_dim]
+            x_traj : Generated trajectories in the form [N x Trajectory_size + Sequence_size x Input_size]
+            y_traj : Generated trajectories in the from [N x Trajectory_size x Output_size]
+        Output:
+            train_x : The input training sequences [N x Sequence_size x Input_dim]
+            train_y : The output training sequences [N x Forecast_size x Output_dim]
+            test_x  : The input test sequences [N x Sequence_size x Input_dim]
+            test_y  : The output test sequences [N x Forecast_size x Output_dim]
+            val_x   : The input validation sequences [N x Sequence_size x Input_dim]
+            val_y   : The output validation sequences [N x Forecast_size x Output_dim]
+            test_traj_x : The input test trajectories [N x Trajectory_size + Sequence_size x Input_dim]
+            test_traj_y : The output test trajectories [N x Trajectory_size x Output_dim]
+            val_traj_x  : The input validation trajectories [N x Trajectory_size + Sequence_size x Input_dim]
+            val_traj_y  : The output validation trajectories  [N x Trajectory_size x Output_dim]
+        """
+        train_x, test_x, val_x = self.split_var_ratio(x)
+        train_y, test_y, val_y = self.split_var_ratio(y)
+        _, test_traj_x, val_traj_x = self.split_var_ratio(traj_x)
+        _, test_traj_y, val_traj_y = self.split_var_ratio(traj_y)
+        self.train_sc, test_sc, val_sc = self.split_var_ratio(self.sequence_continuity)
+        self.train_sc[0] = False
+        self.test_sc[0] = False
+        self.val_sc[0] = False
+        _, test_sc, val_sc = self.split_var_ratio(self.trajectory_continuity)
+        self.test_tc[0] = False
+        self.val_tc[0] = False
+        return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
+
+    def sequence_generator(self, x, y):
+        """
+        Generates a sequence of data to be fed to the network.
+        Input:
+           x: The inputs in the form [N x Input_dim] or [N x 1 + Input_dim] 
+           y: The outputs in the form [N x Output_dim] or [N x 1 + Output_dim]
+        Output:
+           nx: Generated sequence in the form [N x Sequence_size x Input_dim]
+           ny: Generated sequence in the form [N x Forecast_size x Output_dim]
+        """
+        nX = []
+        nY = []
+        continuous = False
+
+        # Stores the indices of all the variables but the continuity index
+        value_x_idx = [xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]
+        value_y_idx = [xx for xx in range(y.shape[1])if xx!=self.sts.continuity_idx]
+        
+        # x is a sequence, y is the data-point or a sequence right after the sequence used as input
+        for i in range(0, x.shape[0]-1-self.sts.sequence_length-self.sts.forecast, self.sts.sequence_length):
+            # First check continuity of the sequence if the flag is enabled
+            if not (self.sts.continuity_idx is None):
+                # flag > 1 => manual control
+                vx = x[i:i+self.sts.sequence_length, self.sts.continuity_idx]
+                vy = y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, self.sts.continuity_idx]
+                # Check sequence is fine, if not skip sequence.
+                # if one of the flag is superior to one, then skip the seq
+                if ((np.max(vx) > 1) or (np.max(vy) > 1)):
+                    continuous = False
+                    continue
+                else:
+                    self.sequence_continuity.append(continuous)
+                    nX.append(x[i:i+self.sts.sequence_length, value_x_idx])
+                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, value_y_idx])
+                    continuous = True
+            else:
+                nX.append(x[i:i+self.sts.sequence_length])
+                nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
+        nx = np.array(nX)
+        ny = np.array(nY)
+        return nx, ny
+    
+    def trajectory_generator(self, x, y):
+        """
+        Generates a sequence of data to be fed to the network.
+        Input:
+           x: The inputs in the form [N x Input_dim] or [N x 1 + Input_dim] 
+           y: The outputs in the form [N x Output_dim] or [N x 1 + Output_dim]
+        Output:
+           nx: Generated sequence in the form [N x Sequence_size x Input_dim]
+           ny: Generated sequence in the form [N x Forecast_size x Output_dim]
+        """
+        nX = []
+        nY = []
+        continuous = False
+        
+        # Stores the indices of all the variables but the continuity index
+        value_x_idx = [xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]
+        value_y_idx = [xx for xx in range(y.shape[1])if xx!=self.sts.continuity_idx]
+         
+        # x is a sequence, y is a sequence right after the sequence used as input
+        for i in range(0, x.shape[0]-1-self.sts.sequence_length-self.sts.trajectory_length, self.sts.sequence_length+self.sts.trajectory_length):
+            # First check continuity of the sequence if the flag is enabled
+            if not (self.sts.continuity_idx is None):
+                # 1 sequence is continuous 0 otherwise.
+                vx = x[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                vy = y[i+1:i+1+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                # Check sequence is fine, if not skip sequence.
+                if ((np.max(vx) > 1) or (np.max(vy) > 1)):
+                    continuous = False
+                    continue
+                else:
+                    self.trajectory_continuity.append(continuous)
+                    nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length,value_x_idx])
+                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
+                    continuous = False
+            else:
+                nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
+                nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
+        nx = np.array(nX)
+        ny = np.array(nY)
+        return nx, ny

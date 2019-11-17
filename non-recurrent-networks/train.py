@@ -238,5 +238,3 @@ class GradTraining(UniformTraining):
         batch_xs, batch_ys = sampler.train_batch_RNN(idxs)
         _ = sess.run(train_step, feed_dict = {x:batch_xs, y:batch_ys, keep_prob: 1.0, step: i, weights:w_i})
 """
-if __name__ == '__main__':
-    UT = UniformTraining()
