@@ -806,7 +806,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         nx = np.concatenate(xstack,axis = 0)
         ny = np.concatenate(ystack,axis = 0)
         nc = np.concatenate(cstack,axis = 0)
-        return nx, ny, nc
+        return nc, nx, ny
     
     def load_data(self):
         """
@@ -831,12 +831,13 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         
         # augment LSTMs data
         self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
+        #print(self.train_sc.shape)
         self.test_sc, self.test_x, self.test_y = self.augment_seq(test_x, test_y, self.test_sc, self.sts.sequence_length)
         self.val_sc, self.val_x, self.val_y = self.augment_seq(val_x, val_y, self.val_sc, self.sts.sequence_length)
         self.test_tc, self.test_traj_x, self.test_traj_y = self.augment_seq(test_traj_x, test_traj_y, self.test_tc, self.sts.sequence_length+self.sts.trajectory_length)
         self.val_tc, self.val_traj_x, self.val_traj_y = self.augment_seq(val_traj_x, val_traj_y, self.val_tc, self.sts.sequence_length+self.sts.trajectory_length)
         # normalize all dataset based on the train-set
-        self.normalize(train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y)
+        self.normalize(self.train_x, self.train_y, self.test_x, self.test_y, self.val_x, self.val_y, self.test_traj_x, self.test_traj_y, self.val_traj_x, self.val_traj_y)
         # get sizes
         self.train_size = self.train_x.shape[0]
         self.test_size = self.test_x.shape[0]

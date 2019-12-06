@@ -53,6 +53,13 @@ class UniformSampler:
         for i in range(max_iter):
             yield [i*1./max_iter, x[i], y[i]]
 
+    def shuffle(self, x, y):
+        s = np.arange(x.shape[0])
+        np.random.shuffle(s)
+        x = x[s].copy()
+        y = y[s].copy()
+        return x, y
+
     def sample_train_batch(self, bs):
         """
         This function returns the train batch along with the percentage of completion
@@ -189,16 +196,16 @@ class GRADSampler(UniformSampler):
         return idxs, 1./probs
 
 
-class LSTMSampler(UniformSampler):
+class RNNSampler(UniformSampler):
     """
     A sampler derived from the Uniform sampler but well suited for continuous time-series
     LSTMs. (Only the sampling function is modified)
     """
     def __init__(self, Dataset):
-        super(LSTMSampler, self).__init__()
+        super(RNNSampler, self).__init__(Dataset)
         self.DS = Dataset
 
-    def sample(self, x, y, batch_size):
+    def sample(self, x, y, continuity, batch_size):
         """
         Sample function: Create a sampler object that lasts
         for an epoch. After that it needs to be refreshed (python2)
@@ -212,26 +219,84 @@ class LSTMSampler(UniformSampler):
         Input:
             x:  the full input dataset 
             y:  the full target dataset
+            continuity: continuity of the dataset
             bs: the desired size of the outputed batches
         Output:
             A generator object (see usage)
         """
         # Prepares the data to suits the LSTMs requirements
-        
-        # roll the data (instead of shuffling)
-        s = np.arange(x.shape[0])
-        np.random.shuffle(s)
-        x = x[s].copy()
-        y = y[s].copy()
-        # Generates batches
-        X = []
-        Y = []
-        for i in range(int(x.shape[0]/batch_size)):
-            X.append(x[i*batch_size:(i+1)*batch_size,:,:])
-            Y.append(y[i*batch_size:(i+1)*batch_size,:,:])
+        max_batch = x.shape[0]//batch_size
+        x = x[:max_batch*batch_size]
+        y = y[:max_batch*batch_size]
+        continuity = continuity[:max_batch*batch_size]
+        X = np.split(x, max_batch)
+        Y = np.split(y, max_batch)
+        C = np.split(continuity, max_batch)
         x = np.array(X)
         y = np.array(Y)
+        c = np.array(C)
+        c[0] = False
         max_iter = x.shape[0]
         # Yield based loop: Generator
         for i in range(max_iter):
-            yield [i*1./max_iter, x[i], y[i]]
+            yield [i*1./max_iter, x[i], y[i], c[i]]
+    
+    def sample_train_batch(self, bs):
+        """
+        This function returns the train batch along with the percentage of completion
+        of the epoch: epoch_completion, Batch_x, Batch_y.
+        """
+        try:
+            return next(self.TB)
+        except:
+            self.TB = self.sample(self.DS.train_x, self.DS.train_y, self.DS.train_sc, bs)
+            return next(self.TB)
+    
+    def sample_eval_train_batch(self, bs):
+        """
+        This function returns the train batch along with the percentage of completion
+        of the epoch: epoch_completion, Batch_x, Batch_y.
+        """
+        try:
+            return next(self.TBE)
+        except:
+            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, self.DS.train_sc, bs)
+            return next(self.TBE)
+     
+    def sample_test_batch(self, bs=None):
+        """
+        This function returns the test batch along with the percentage of completion
+        of the epoch: epoch_completion, Batch_x, Batch_y.
+        """
+        try:
+            return next(self.TeB)
+        except:
+            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, self.DS.test_sc, bs)
+            return next(self.TeB)
+
+    def sample_val_batch(self, bs=None):
+        """
+        This function returns the val batch along with the percentage of completion
+        of the epoch: epoch_completion, Batch_x, Batch_y.
+        """
+        try:
+            return next(self.TvB)
+        except:
+            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, self.DS.val_sc, bs)
+            return next(self.TvB)
+    
+    def sample_val_trajectory(self):
+        """
+        This function returns the whole of the trajectory testing set.
+        """
+        x = self.DS.val_traj_x
+        y = self.DS.val_traj_y
+        return x, y
+    
+    def sample_test_trajectory(self):
+        """
+        This function returns the whole of the trajectory validation set.
+        """
+        x = self.DS.test_traj_x
+        y = self.DS.test_traj_y
+        return x, y
