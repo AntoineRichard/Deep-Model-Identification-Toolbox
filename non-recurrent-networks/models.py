@@ -329,8 +329,10 @@ class GraphATTNMPAR_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphMLP_dX:
-    def __init__(self, settings, d, act=tf.nn.relu):
+class GraphMLP:
+    """
+    """
+    def __init__(self, settings, layer_type, params, act=tf.nn.relu):
 
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
@@ -344,9 +346,14 @@ class GraphMLP_dX:
         self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
         self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
         # Operations
-        for i, di in enumerate(d):
-            self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-        self.y_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output')
+        self.xc = self.xr
+        for i, layer_type in enumerate(layers):
+            if layer_type == 'dense':
+                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+            if layer_type == 'dropout':
+                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+
         # Loss
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.yr))
@@ -361,7 +368,9 @@ class GraphMLP_dX:
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphMLP_CPLX_dX:
+class GraphMLP_CPLX:
+    """
+    """
     def __init__(self, settings, d, act=tf.nn.relu):
 
         # PLACEHOLDERS
@@ -424,7 +433,9 @@ class GraphMLP_CPLX_dX:
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphCNN_kXcX_pX_dX:
+class GraphCNN:
+    """
+    """
     def __init__(self, settings, layers, params, act=tf.nn.relu):
 
         # PLACEHOLDERS
@@ -450,6 +461,8 @@ class GraphCNN_kXcX_pX_dX:
                     self.xc = tf.layers.flatten(self.xc, name='flatten')
                     must_reshape = False
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+            if layer_type == 'dropout':
+                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
         self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
 
         # Loss
