@@ -138,11 +138,11 @@ class H5Reader:
             data_traj_y.append(traj_y)
             data_x.append(tmp_x)
             data_y.append(tmp_y)
-        numpy_traj_x = np.concatenate((data_x), axis=0)
-        numpy_traj_y = np.concatenate((data_y), axis=0)
+        numpy_traj_x = np.concatenate((data_traj_x), axis=0)
+        numpy_traj_y = np.concatenate((data_traj_y), axis=0)
         numpy_data_x = np.concatenate((data_x), axis=0)
         numpy_data_y = np.concatenate((data_y), axis=0)
-        return numpy_data_x, numpy_data_y, traj_x, traj_y
+        return numpy_data_x, numpy_data_y, numpy_traj_x, numpy_traj_y
 
     def split_var(self, x):
         """
@@ -259,7 +259,6 @@ class H5Reader:
             y = xy[:,value_idx]
             y = y[:,:self.sts.output_dim]
             continuity_flag = xy[:, self.sts.continuity_idx]
-            print(y.shape)
             return x, np.hstack((np.expand_dims(continuity_flag,-1),y))
         else:
             y = xy[:,:self.sts.output_dim]
@@ -470,9 +469,9 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
     support for continuous time RNNs and seq2seq processing.
     """
     def __init__(self, settings):
-        super(H5Reader_Seq2Seq_RNN, self).__init__(settings)
         self.sequence_continuity = []
         self.trajectory_continuity = []
+        super(H5Reader_Seq2Seq_RNN, self).__init__(settings)
     
     def split_var(self, x, continuity):
         """
@@ -518,6 +517,23 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         train_c = np.concatenate([continuity_split[i] for i in range(self.sts.folds) if i!=self.sts.val_idx], axis=0)
         train_c[0] = False
         return train_x, test_x, val_x, train_c, test_c, val_c
+    
+    def split_var_ratio(self, x):
+        """
+        Splits the data into [Train | Val | Test] where the size of the test is a percentage of the whole data
+        defined by the setting test_ratio (in the settings object), the size of the val is a percentage of the
+        remaining data defined by val_ratio (in the settings object) and the size of the training set is the 
+        rest of the data.
+        Input:
+            x : The whole data [N x M x O]
+        Output:
+            x_train : The training set [N x M x O]
+            x_test  : The test set [N x M x O]
+            x_val   : The val set [N x M x O]
+        """
+        x, x_test = np.split(x,[int(-self.sts.test_ratio*x.shape[0])])
+        x_train, x_val = np.split(x,[int(-self.sts.val_ratio*x.shape[0])])
+        return x_train, x_test, x_val
 
     def cross_validation_split(self, x, y, x_traj, y_traj):
         """
@@ -571,13 +587,14 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         train_y, test_y, val_y = self.split_var_ratio(y)
         _, test_traj_x, val_traj_x = self.split_var_ratio(traj_x)
         _, test_traj_y, val_traj_y = self.split_var_ratio(traj_y)
-        self.train_sc, test_sc, val_sc = self.split_var_ratio(self.sequence_continuity)
+        self.train_sc, self.test_sc, self.val_sc = self.split_var_ratio(self.sequence_continuity)
         self.train_sc[0] = False
         self.test_sc[0] = False
         self.val_sc[0] = False
-        _, test_sc, val_sc = self.split_var_ratio(self.trajectory_continuity)
+        _, self.test_tc, self.val_tc = self.split_var_ratio(self.trajectory_continuity)
         self.test_tc[0] = False
         self.val_tc[0] = False
+        print(self.val_tc)
         return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
     def sequence_generator(self, x, y):
@@ -616,8 +633,10 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                     nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, value_y_idx])
                     continuous = True
             else:
+                self.sequence_continuity.append(continuous)
                 nX.append(x[i:i+self.sts.sequence_length])
                 nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
+                continuous = True
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
@@ -655,10 +674,12 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                     self.trajectory_continuity.append(continuous)
                     nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length,value_x_idx])
                     nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
-                    continuous = False
+                    continuous = True
             else:
+                self.trajectory_continuity.append(continuous)
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
                 nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
+                continuous = True
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
@@ -667,20 +688,19 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         xstack = []
         ystack = []
         cstack = []
-        idx_to_split = np.argwhere(continuity == False)
+        continuity[0] = True
+        idx_to_split = np.squeeze(np.argwhere(continuity == False))
         xl = np.split(x, idx_to_split)
         yl = np.split(y, idx_to_split)
         for xy in zip(xl,yl):
             for i in range(size):
-                # rebuilds the sequence
                 rx = np.reshape(xy[0],[xy[0].shape[0]*xy[0].shape[1],xy[0].shape[2]])
                 ry = np.reshape(xy[1],[xy[1].shape[0]*xy[1].shape[1],xy[1].shape[2]])
                 # roll the sequence and remove the end (rolled over points)
                 rx = np.roll(rx,-i)[:-size]
-                ry = np.roll(ry,-i)[:-size]
-                # reformat into batch
-                rx = reshape(rx,[-1,size,self.sts.input_dim])
-                ry = reshape(ry,[-1,size,self.sts.output_dim])
+                ry = np.roll(ry,-i)[:-1]
+                rx = np.reshape(rx,[-1,size,self.sts.input_dim])
+                ry = np.reshape(ry,[-1,1,self.sts.output_dim])
                 xstack.append(rx)
                 ystack.append(ry)
                 rc = np.ones(rx.shape[0], dtype=np.int) == 1
@@ -691,8 +711,6 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         ny = np.concatenate(ystack,axis = 0)
         nc = np.concatenate(cstack,axis = 0)
         return nx, ny, nc
-
-
     
     def load_data(self):
         """
@@ -700,12 +718,14 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         """
         # Load each dataset
         train_x, train_y, traj_x, traj_y = self.load(self.sts.train_dir)
+        self.sequence_continuity = np.array(self.sequence_continuity)
+        self.trajectory_continuity = np.array(self.trajectory_continuity)
         if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
             if self.sts.use_X_val:
                 raise('Cannot use cross-validation with separated directory for training validation and testing.')
             else:
-                test_x, test_y, test_traj_x, test_traj_y = self.load(self.sts.test_dir)
-                val_x, val_y, val_traj_x, val_traj_y = self.load(self.sts.val_dir)
+                test_x, test_y, test_traj_x, test_traj_y, test_seq_c, test_traj_c = self.load(self.sts.test_dir)
+                val_x, val_y, val_traj_x, val_traj_y, val_seq_c, val_traj_c = self.load(self.sts.val_dir)
         elif self.sts.test_dir is None and self.sts.val_dir is not None:
             raise('Test root was not provided but validation root was, provide none or both.')
         elif self.sts.val_dir is None and self.sts.test_dir is not None:
@@ -717,9 +737,9 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         
         # augment LSTMs data
         self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
-        self.test_sc, self.test_x, self.test_y = self.augment_seq(test_x, test_y, self.test_sc, self.test_sc, self.sts.sequence_length)
+        self.test_sc, self.test_x, self.test_y = self.augment_seq(test_x, test_y, self.test_sc, self.sts.sequence_length)
         self.val_sc, self.val_x, self.val_y = self.augment_seq(val_x, val_y, self.val_sc, self.sts.sequence_length)
-        self.test_tc, self.test_traj_x, self.test_traj_y = self.augment_seq(test_traj_x, test_traj_y, self.test_tc, self.test_sc, self.sts.sequence_length+self.sts.trajectory_length)
+        self.test_tc, self.test_traj_x, self.test_traj_y = self.augment_seq(test_traj_x, test_traj_y, self.test_tc, self.sts.sequence_length+self.sts.trajectory_length)
         self.val_tc, self.val_traj_x, self.val_traj_y = self.augment_seq(val_traj_x, val_traj_y, self.val_tc, self.sts.sequence_length+self.sts.trajectory_length)
         # normalize all dataset based on the train-set
         self.normalize(train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y)
