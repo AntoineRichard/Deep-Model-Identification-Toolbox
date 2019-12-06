@@ -110,12 +110,34 @@ class H5Reader:
     def read_file(self, path):
         """
         Reads the HDF5 file and casts it into a numpy array.
+        Input:
+            path : a path to a HDF5 file
+        Output:
+            array : a numpy array of based on the provided HDF5 file
         """
         return np.array(h5.File(path,'r')["train_X"])
 
     def load(self, root):
         """
-        Loads the whole of the training set
+        Reads one or more file located inside the provided folder path. After reading
+        the files, the data is splited in X (Input of the network) and Y (output of
+        the network). Once that is done, sequences and trajectories are generated.
+        Here a sequence is a time ordered list of inputs or output, usually they 
+        can be seen has a matrices of shape a NxM, where N is the sequence size and
+        M is the input/output size. The trajectories are similar except that they
+        are meant to be used for iterative predictions hence they are longer.
+        Input:
+            root : A path to the folder containing your data. (Even if there is
+                   only one file it has to be in a folder)
+        Output:
+            numpy_data_x : a numpy array containing all the input sequences of the
+                           network. Please note that x and y have matching indices.
+            numpy_data_y : a numpy array containing all the output sequences of the
+                           network. Please note that x and y have matching indices.
+            numpy_traj_x : a numpy array containing all the input trajectories of the
+                           network. Please note that x and y have matching indices.
+            numpy_traj_y : a numpy array containing all the output trajectories of the
+                           network. Please note that x and y have matching indices.
         """
         files = os.listdir(root)
         data_x = []
@@ -138,6 +160,7 @@ class H5Reader:
             data_traj_y.append(traj_y)
             data_x.append(tmp_x)
             data_y.append(tmp_y)
+        # concatenates as a numpy array
         numpy_traj_x = np.concatenate((data_traj_x), axis=0)
         numpy_traj_y = np.concatenate((data_traj_y), axis=0)
         numpy_data_x = np.concatenate((data_x), axis=0)
@@ -341,7 +364,7 @@ class H5Reader:
 
     def load_data(self):
         """
-        Build the dataset and splits it based on user input
+        Build the dataset and splits it based on user inputs
         """
         # Load each dataset
         train_x, train_y, traj_x, traj_y = self.load(self.sts.train_dir)
@@ -469,9 +492,69 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
     support for continuous time RNNs and seq2seq processing.
     """
     def __init__(self, settings):
-        self.sequence_continuity = []
-        self.trajectory_continuity = []
         super(H5Reader_Seq2Seq_RNN, self).__init__(settings)
+    
+    def load(self, root):
+        """
+        Reads one or more file located inside the provided folder path. After reading
+        the files, the data is splited in X (Input of the network) and Y (output of
+        the network). Once that is done, sequences and trajectories are generated.
+        Here a sequence is a time ordered list of inputs or output, usually they 
+        can be seen has a matrices of shape a NxM, where N is the sequence size and
+        M is the input/output size. The trajectories are similar except that they
+        are meant to be used for iterative predictions hence they are longer.
+        Continuous RNN modification inolve handling inter-sequence/trajectories
+        continuity. If two sequences follow each other without time discontinuity
+        then the continuity boolean is set to True, else False.
+        Input:
+            root : A path to the folder containing your data. (Even if there is
+                   only one file it has to be in a folder)
+        Output:
+            numpy_seq_c : a numpy boolean array containing the continuity of the
+                          generated sequences.
+            numpy_traj_y : a numpy boolean array containing the continuity of the
+                           generated trajectories.
+            numpy_data_x : a numpy array containing all the input sequences of the
+                           network. Please note that x and y have matching indices.
+            numpy_data_y : a numpy array containing all the output sequences of the
+                           network. Please note that x and y have matching indices.
+            numpy_traj_x : a numpy array containing all the input trajectories of the
+                           network. Please note that x and y have matching indices.
+            numpy_traj_y : a numpy array containing all the output trajectories of the
+                           network. Please note that x and y have matching indices.
+        """
+        files = os.listdir(root)
+        data_x = []
+        data_y = []
+        data_traj_x = []
+        data_traj_y = []
+        seq_continuity = []
+        traj_continuity = []
+        for i in files:
+            # Load file
+            tmp = self.read_file(os.path.join(root,i))
+            # Remove time-stamp if need be
+            tmp = self.remove_ts(tmp)
+            # split the input and targets
+            tmp_x, tmp_y = self.split_input_output(tmp)
+            # generate trajectories
+            traj_x, traj_y, seq_idx = self.trajectory_generator(tmp_x, tmp_y)
+            # generates sequences for training
+            tmp_x, tmp_y, traj_idx = self.sequence_generator(tmp_x, tmp_y)
+            # append for concatenation
+            data_traj_x.append(traj_x)
+            data_traj_y.append(traj_y)
+            data_x.append(tmp_x)
+            data_y.append(tmp_y)
+            seq_continuity.append(seq_idx)
+            traj_continuity.append(traj_idx)
+        numpy_traj_x = np.concatenate((data_traj_x), axis=0)
+        numpy_traj_y = np.concatenate((data_traj_y), axis=0)
+        numpy_data_x = np.concatenate((data_x), axis=0)
+        numpy_data_y = np.concatenate((data_y), axis=0)
+        numpy_seq_c = np.concatenate((seq_continuity), axis=0)
+        numpy_traj_c = np.concatenate((traj_continuity), axis=0)
+        return numpy_data_x, numpy_data_y, numpy_traj_x, numpy_traj_y, numpy_seq_c, numpy_traj_c
     
     def split_var(self, x, continuity):
         """
@@ -599,7 +682,10 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
 
     def sequence_generator(self, x, y):
         """
-        Generates a sequence of data to be fed to the network.
+        Generates a sequence of data to be fed to the network. Continuous RNN
+        modification inolve handling inter-sequences continuity. If two sequences
+        follow each other without time discontinuity then the continuity boolean
+        is set to True, else False.
         Input:
            x: The inputs in the form [N x Input_dim] or [N x 1 + Input_dim] 
            y: The outputs in the form [N x Output_dim] or [N x 1 + Output_dim]
@@ -609,6 +695,8 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         """
         nX = []
         nY = []
+        seq_c = []
+
         continuous = False
 
         # Stores the indices of all the variables but the continuity index
@@ -628,22 +716,25 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                     continuous = False
                     continue
                 else:
-                    self.sequence_continuity.append(continuous)
+                    seq_c.append(continuous)
                     nX.append(x[i:i+self.sts.sequence_length, value_x_idx])
                     nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, value_y_idx])
                     continuous = True
             else:
-                self.sequence_continuity.append(continuous)
+                seq_c.append(continuous)
                 nX.append(x[i:i+self.sts.sequence_length])
                 nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
                 continuous = True
         nx = np.array(nX)
         ny = np.array(nY)
-        return nx, ny
+        return nx, ny, seq_c
     
     def trajectory_generator(self, x, y):
         """
-        Generates a sequence of data to be fed to the network.
+        Generates a sequence of data to be fed to the network. Continuous RNN 
+        modification inolve handling inter-trajectories continuity. If two trajectories
+        follow each other without time discontinuity then the continuity boolean is set
+        to True, else False.
         Input:
            x: The inputs in the form [N x Input_dim] or [N x 1 + Input_dim] 
            y: The outputs in the form [N x Output_dim] or [N x 1 + Output_dim]
@@ -653,6 +744,8 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         """
         nX = []
         nY = []
+        traj_c = []
+
         continuous = False
         
         # Stores the indices of all the variables but the continuity index
@@ -671,18 +764,18 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                     continuous = False
                     continue
                 else:
-                    self.trajectory_continuity.append(continuous)
+                    self.traj_c.append(continuous)
                     nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length,value_x_idx])
                     nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
                     continuous = True
             else:
-                self.trajectory_continuity.append(continuous)
+                traj_c.append(continuous)
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
                 nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
                 continuous = True
         nx = np.array(nX)
         ny = np.array(nY)
-        return nx, ny
+        return nx, ny, traj_c
 
     def augment_seq(self, x, y, continuity, size):
         xstack = []
@@ -717,7 +810,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         Build the dataset and splits it based on user input
         """
         # Load each dataset
-        train_x, train_y, traj_x, traj_y = self.load(self.sts.train_dir)
+        train_x, train_y, traj_x, traj_y, seq_c, traj_c = self.load(self.sts.train_dir)
         self.sequence_continuity = np.array(self.sequence_continuity)
         self.trajectory_continuity = np.array(self.trajectory_continuity)
         if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
