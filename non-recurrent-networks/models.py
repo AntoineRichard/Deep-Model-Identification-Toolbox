@@ -290,7 +290,7 @@ class GraphMLP:
     """
     MLP.
     """
-    def __init__(self, settings, layer_type, params, act=tf.nn.relu):
+    def __init__(self, settings, layers, params, act=tf.nn.relu):
 
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
