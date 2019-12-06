@@ -538,9 +538,9 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             # split the input and targets
             tmp_x, tmp_y = self.split_input_output(tmp)
             # generate trajectories
-            traj_x, traj_y, seq_idx = self.trajectory_generator(tmp_x, tmp_y)
+            traj_x, traj_y, traj_idx = self.trajectory_generator(tmp_x, tmp_y)
             # generates sequences for training
-            tmp_x, tmp_y, traj_idx = self.sequence_generator(tmp_x, tmp_y)
+            tmp_x, tmp_y, seq_idx = self.sequence_generator(tmp_x, tmp_y)
             # append for concatenation
             data_traj_x.append(traj_x)
             data_traj_y.append(traj_y)
@@ -618,7 +618,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         x_train, x_val = np.split(x,[int(-self.sts.val_ratio*x.shape[0])])
         return x_train, x_test, x_val
 
-    def cross_validation_split(self, x, y, x_traj, y_traj):
+    def cross_validation_split(self, x, y, x_traj, y_traj, seq_c, traj_c):
         """
         Calls the spliting methode related to the K-Fold Cross Validation and applies it to
         the x, y, x_traj and y_traj
@@ -627,6 +627,8 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             y : Generated sequence in the form [N x Forecast_size x Output_dim]
             x_traj : Generated trajectories in the form [N x Trajectory_size + Sequence_size x Input_size]
             y_traj : Generated trajectories in the from [N x Trajectory_size x Output_size]
+            seq_c  : Sequence continuity indices
+            traj_c : Trajectorie continuity indices
         Output:
             train_x : The input training sequences [N x Sequence_size x Input_dim]
             train_y : The output training sequences [N x Forecast_size x Output_dim]
@@ -639,13 +641,13 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             val_traj_x  : The input validation trajectories [N x Trajectory_size + Sequence_size x Input_dim]
             val_traj_y  : The output validation trajectories  [N x Trajectory_size x Output_dim]
         """
-        train_x, test_x, val_x, self.train_sc, self.test_sc, self.val_sc = self.split_var(x, self.sequence_continuity)
+        train_x, test_x, val_x, self.train_sc, self.test_sc, self.val_sc = self.split_var(x, seq_c)
         train_y, test_y, val_y = self.split_var(y)
-        _, test_traj_x, val_traj_x, _, self.test_c, self.val_c = self.split_var(x_traj, self.trajectory_continuity)
+        _, test_traj_x, val_traj_x, _, self.test_c, self.val_c = self.split_var(x_traj, traj_c)
         _, test_traj_y, val_traj_y = self.split_var(y_traj)
         return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
-    def ratio_based_split(self, x, y, traj_x, traj_y):
+    def ratio_based_split(self, x, y, traj_x, traj_y, seq_c, traj_c):
         """
         Calls the spliting methode related to the ratio based split and applies it to
         the x, y, x_traj and y_traj
@@ -654,6 +656,8 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             y : Generated sequence in the form [N x Forecast_size x Output_dim]
             x_traj : Generated trajectories in the form [N x Trajectory_size + Sequence_size x Input_size]
             y_traj : Generated trajectories in the from [N x Trajectory_size x Output_size]
+            seq_c  : Sequence continuity indices
+            traj_c : Trajectorie continuity indices
         Output:
             train_x : The input training sequences [N x Sequence_size x Input_dim]
             train_y : The output training sequences [N x Forecast_size x Output_dim]
@@ -670,14 +674,13 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         train_y, test_y, val_y = self.split_var_ratio(y)
         _, test_traj_x, val_traj_x = self.split_var_ratio(traj_x)
         _, test_traj_y, val_traj_y = self.split_var_ratio(traj_y)
-        self.train_sc, self.test_sc, self.val_sc = self.split_var_ratio(self.sequence_continuity)
+        self.train_sc, self.test_sc, self.val_sc = self.split_var_ratio(seq_c)
         self.train_sc[0] = False
         self.test_sc[0] = False
         self.val_sc[0] = False
-        _, self.test_tc, self.val_tc = self.split_var_ratio(self.trajectory_continuity)
+        _, self.test_tc, self.val_tc = self.split_var_ratio(traj_c)
         self.test_tc[0] = False
         self.val_tc[0] = False
-        print(self.val_tc)
         return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
     def sequence_generator(self, x, y):
@@ -811,8 +814,6 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         """
         # Load each dataset
         train_x, train_y, traj_x, traj_y, seq_c, traj_c = self.load(self.sts.train_dir)
-        self.sequence_continuity = np.array(self.sequence_continuity)
-        self.trajectory_continuity = np.array(self.trajectory_continuity)
         if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
             if self.sts.use_X_val:
                 raise('Cannot use cross-validation with separated directory for training validation and testing.')
@@ -824,9 +825,9 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         elif self.sts.val_dir is None and self.sts.test_dir is not None:
             raise('Validation root was not provided but test root was, provide none or both.')
         elif self.sts.use_X_val:
-            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.cross_validation_split(train_x, train_y, traj_x, traj_y)
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.cross_validation_split(train_x, train_y, traj_x, traj_y, seq_c, traj_c)
         else:
-            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y)
+            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y, seq_c, traj_c)
         
         # augment LSTMs data
         self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
