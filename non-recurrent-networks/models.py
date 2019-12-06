@@ -130,50 +130,7 @@ class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
-'''
-class GraphATTNMP_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
-    def __init__(self, settings, d_model, ff, alpha, d, act=tf.nn.relu):
-        # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,settings.input_dim], name='inputs')
-        self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
-        self.step = tf.placeholder(tf.int32, name='step')
-        self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
-        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
-        # Reshape
-        mask = self.make_causal_mask(settings.sequence_length)
 
-        # Embedding
-        self.embbed = tf.layers.dense(self.x, d_model, use_bias=False, activation=None)
-        # Positional Embedding
-        self.pcoded = self.positional_encoding(self.embbed, d_model, settings.sequence_length)
-        # Attention Projection
-        with tf.variable_scope('qkv_projection'):
-            self.QW = tf.layers.dense(self.pcoded, d_model, activation=act, name='q_projection')
-            self.KW = tf.layers.dense(self.pcoded, d_model, activation=act, name='k_projection')
-            self.VW = tf.layers.dense(self.pcoded, d_model, activation=act, name='v_projection')
-        # Attention mechanism
-        self.xr = self.attention(self.QW, self.KW, self.VW, float(d_model), mask)
-        # FeedForward
-        with tf.variable_scope('feed_forward'):
-            for i, di in enumerate(d):
-                self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-        self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
-        self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
-        # Loss
-        self.diff = tf.square(tf.subtract(self.ys_, self.y))
-        self.seq_loss = tf.reduce_mean(self.diff, axis = -1)
-        self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
-        a = tf.pow(tf.divide(tf.range(settings.sequence_length,dtype=tf.float32),settings.sequence_length),alpha)
-        weights = tf.divide(a,tf.reduce_max(a))
-        self.w_loss = tf.reduce_mean(tf.multiply(self.seq_loss, weights))
-        # Train
-        self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
-        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
-        self.train_step = train_fn(self.w_loss, settings.learning_rate)
-        # Tensorboard
-        self.merged = tf.summary.merge_all()
-'''
 class GraphATTNMPMH_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
     def __init__(self, settings, d_model, ff, alpha, d, act=tf.nn.relu):
         # PLACEHOLDERS
@@ -331,6 +288,7 @@ class GraphATTNMPAR_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
 
 class GraphMLP:
     """
+    MLP.
     """
     def __init__(self, settings, layer_type, params, act=tf.nn.relu):
 
@@ -370,8 +328,9 @@ class GraphMLP:
 
 class GraphMLP_CPLX:
     """
+    MLP for Complex valued number.
     """
-    def __init__(self, settings, d, act=tf.nn.relu):
+    def __init__(self, settings, layer_type, params, act=tf.nn.relu):
 
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
@@ -387,22 +346,23 @@ class GraphMLP_CPLX:
         self.xr = tf.reshape(self.xe, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
         self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
         # Operations
-        for i, di in enumerate(d):
-            with tf.name_scope('dense_'+str(i)):
-                with tf.name_scope('Complex_Kernel'):
-                    wr = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), di)))
-                    wi = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), di)))
-                    weight_matrix = tf.complex(wr,wi)
-                with tf.name_scope('Complex_Bias'):
-                    br = tf.Variable(tf.zeros_initializer()(di))
-                    bi = tf.Variable(tf.zeros_initializer()(di))
-                    bias = tf.complex(br,bi)
-                with tf.name_scope('MatMul'):
-                    matmul = tf.matmul(self.xr,weight_matrix)
-                with tf.name_scope('BiasAdd'):
-                    biasadd = matmul + bias
-                with tf.name_scope('Activation'):
-                    self.xr = tf.tanh(biasadd)
+        for i, di in enumerate(layer_type):
+            if di == 'dense':
+                with tf.name_scope('dense_'+str(i)):
+                    with tf.name_scope('Complex_Kernel'):
+                        wr = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), params[i])))
+                        wi = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), params[i])))
+                        weight_matrix = tf.complex(wr,wi)
+                    with tf.name_scope('Complex_Bias'):
+                        br = tf.Variable(tf.zeros_initializer()(params[i]))
+                        bi = tf.Variable(tf.zeros_initializer()(params[i]))
+                        bias = tf.complex(br,bi)
+                    with tf.name_scope('MatMul'):
+                        matmul = tf.matmul(self.xr,weight_matrix)
+                    with tf.name_scope('BiasAdd'):
+                        biasadd = matmul + bias
+                    with tf.name_scope('Activation'):
+                        self.xr = tf.tanh(biasadd)
         with tf.name_scope('Complex_Kernel'):
             wr = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), settings.output_dim)))
             wi = tf.Variable(tf.glorot_uniform_initializer()((int(self.xr.shape[-1]), settings.output_dim)))
@@ -435,6 +395,7 @@ class GraphMLP_CPLX:
 
 class GraphCNN:
     """
+    CNN.
     """
     def __init__(self, settings, layers, params, act=tf.nn.relu):
 
@@ -478,6 +439,103 @@ class GraphCNN:
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
+
+class GraphRNN:
+    """
+    RNN.
+    """
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
+        self.hs = tf.placeholder(tf.float32, [recurrent_layers, None, hidden_state], name = 'hidden_state')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+       
+        # Hidden-State definition 
+        self.rnn_tuple_state = tuple([self.hs[idx] for idx in range(recurrent_layers)])
+        stacked_rnn = []
+        for _ in range(recurrent_layers):
+            stacked_rnn.append(tf.nn.rnn_cell.BasicRNNCell(hidden_state, activation=tf.nn.tanh, name='rnn_cell_'+str(_)))
+        cell = tf.nn.rnn_cell.MultiRNNCell(stacked_rnn, state_is_tuple = True)
+        # Reshape data
+        self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim], name="input-reformated")
+        self.yr = tf.reshape(self.y, [-1, settings.sequence_length*settings.output_dim], name="target-reformated")
+        self.inputs_series = tf.split(self.xr, settings.sequence_length, axis=1)
+        self.labels_series = tf.split(self.yr, settings.sequence_length, axis=1)
+        # Send data in two passes
+        self.input_one = [self.inputs_series[0]]
+        self.input_two = self.inputs_series[1:]
+        # Operations
+        # Roll RNN in 2 steps
+        # First to get the the hidden state after only one iteration (needed for multistep)
+        self.first_series, self.mid_state = tf.nn.static_rnn(cell, self.input_one, initial_state=self.rnn_tuple_state)
+        # Then roll the rest
+        self.second_series, self.current_state = tf.nn.static_rnn(cell, self.input_two, initial_state=self.mid_state)
+        self.states_series = self.first_series + self.second_series
+        # FeedForward layers
+        self.tensor_state = tf.transpose(tf.convert_to_tensor(self.states_series),[1,0,2])
+        #print(self.tensor_state.shape)
+        #exit(0)
+        self.xc = self.tensor_state
+        for i, layer in enumerate(layer_type):
+            if layer == 'dense':
+                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+            if layer == 'dropout':
+                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+        #print(self.y_.shape) 
+        #exit(0)
+        #with tf.name_scope('dense_1'):
+        #    W2 = tf.Variable(np.random.rand(self.settings.state_size, 16),dtype=tf.float32, name = 'weights')
+        #    b2 = tf.Variable(np.zeros((1,16)), dtype=tf.float32, name = 'bias')
+        #    self.x_series = [tf.matmul(state, W2) + b2 for state in self.states_series]
+        #with tf.name_scope('dense_2'):
+        #    W3 = tf.Variable(np.random.rand(16, self.settings.output_dim),dtype=tf.float32, name = 'weights')
+        #    b3 = tf.Variable(np.zeros((1,self.settings.output_dim)), dtype=tf.float32, name = 'bias')
+        #    self.logits_series = [tf.matmul(x, W3) + b3 for x in self.x_series]
+        # Loss
+        #with tf.name_scope('loss_op'):
+        #    self.losses = [tf.losses.huber_loss(logits,labels) for logits, labels in zip(self.logits_series,self.labels_series)]
+        #    self.logits = self.logits_series
+        #    self.loss = tf.reduce_mean(self.losses)
+        #with tf.name_scope('accuracy_op'):
+        #    self.accuracy = tf.reduce_mean([tf.square(tf.subtract(labels, logits)) for logits, labels in zip(self.logits_series, self.labels_series)])
+        #with tf.name_scope('train_step'):
+        #    self.train_step = tf.train.AdamOptimizer(self.settings.learning_rate).minimize(self.loss)
+
+
+        # Reshape
+        #self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
+        #self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
+        # Operations
+        #self.xc = self.xr
+        #for i, layer_type in enumerate(layers):
+        #    if layer_type == 'dense':
+        #        self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+        #    if layer_type == 'dropout':
+        #        self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
+        #self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+
+        # Loss
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.y_, self.y))
+            self.s_loss = tf.reduce_mean(self.diff, axis=1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
+        # Train
+        self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
+
+
+
 
 class GraphMHCNN_k3cik3cip2k3cik3cid64d64:
     def __init__(self,input_history,input_dim,output_forecast,output_dim):

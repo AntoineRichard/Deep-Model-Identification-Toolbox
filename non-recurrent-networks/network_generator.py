@@ -19,7 +19,7 @@ def get_activation(name):
         raise ValueError('error: unknown activation function')
     return activation
 
-def CNN_Generator(name):
+def CNN_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
     a CNN (Convolutional Neural Network).
@@ -48,7 +48,7 @@ def CNN_Generator(name):
 
     All the combinations should work.
     """
-    activation = get_activation(name[1])
+    activation = get_activation(name)
     d = name[2:]
     layer_type = []
     layer_param = []
@@ -70,7 +70,7 @@ def CNN_Generator(name):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphCNN(settings, layer_type, layer_param, act=activation)
 
-def MLP_Generator(name):
+def MLP_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
     a MLP (Multi Layer Perceptron).
@@ -93,7 +93,7 @@ def MLP_Generator(name):
 
     All the combinations should work.
     """
-    activation = get_activation(name[1])
+    activation = get_activation(name)
     d = name[2:]
     layer_type = []
     layer_param = []
@@ -108,7 +108,7 @@ def MLP_Generator(name):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphMLP(settings, layer_type, layer_param, act=activation)
 
-def MLP_Complex_Generator(name):
+def MLP_Complex_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
     a MLP (Multi Layer Perceptron) based on complex number (as
@@ -123,7 +123,7 @@ def MLP_Complex_Generator(name):
     the type of activation function must follow, then follows as much
     layers as desired. Each 'word' must be separated using underscores.
     """
-    activation = get_activation(name[1])
+    activation = get_activation(name)
     d = name[2:]
     layer_type = []
     layer_param = []
@@ -135,7 +135,7 @@ def MLP_Complex_Generator(name):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphMLP_CPLX(settings, layer_type, layer_param, act=activation)
 
-def RNN_Generator(name):
+def RNN_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
     a simple RNN (Recurrent Neural Network).
@@ -167,11 +167,12 @@ def RNN_Generator(name):
     
     All the combinations should work.
     """
-    activation = get_activation(name[1])
+    activation = get_activation(name)
     hidden_state = None
     recurrent_layers = None
     layer_type = []
     layer_param = []
+    d = name[2:]
     for di in d:
         if di[:2] == 'hs':
             hidden_state = int(di[2:])
@@ -187,7 +188,7 @@ def RNN_Generator(name):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphRNN(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation)
 
-def GRU_Generator(name):
+def GRU_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
     a GRU (Gated Recurrent Unit) network.
@@ -219,11 +220,12 @@ def GRU_Generator(name):
     
     All the combinations should work.
     """
-    activation = get_activation(name[1])
+    activation = get_activation(name)
     hidden_state = None
     recurrent_layers = None
     layer_type = []
     layer_param = []
+    d = name[2:]
     for di in d:
         if di[:2] == 'hs':
             hidden_state = int(di[2:])
@@ -239,7 +241,7 @@ def GRU_Generator(name):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphGRU(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation)
 
-def LSTM_Generator(name):
+def LSTM_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
     a LSTM (Long Short Term Memory) network.
@@ -271,11 +273,12 @@ def LSTM_Generator(name):
     
     All the combinations should work.
     """
-    activation = get_activation(name[1])
+    activation = get_activation(name)
     hidden_state = None
     recurrent_layers = None
     layer_type = []
     layer_param = []
+    d = name[2:]
     for di in d:
         if di[:2] == 'hs':
             hidden_state = int(di[2:])
@@ -298,32 +301,32 @@ def get_graph(settings):
     """
     name = settings.model.split('_')
     if name[0] == 'MLP':
-        return MLP_Generator(name)
+        return MLP_Generator(name,settings)
     
     if name[0] == 'MLPCPLX':
-        return MLP_Complex_Generator(name)
+        return MLP_Complex_Generator(name,settings)
 
     elif name[0] == 'CNN':
-        return CNN_Generator(name)
+        return CNN_Generator(name,settings)
 
     elif name[0] == 'RNN':
-        return RNN_Generator(name)
+        return RNN_Generator(name,settings)
 
     elif name[0] == 'LSTM':
-        return LSTM_Generator(name)
+        return LSTM_Generator(name,settings)
 
     elif name[0] == 'GRU':
-        return GRU_Generator(name)
+        return GRU_Generator(name,settings)
 
     elif name[0] == 'ATTNSP':
-        activation = get_activation(name[1])
+        activation = get_activation(name)
         d_model = int(name[2])
         ff = int(name[3])
         d = name[4:]
         d = [int(x) for x in d]
         return models.GraphATTNSP_dmodel_ff_dX(settings, d_model, ff, d, act=activation)
     elif name[0] == 'ATTNMP':
-        activation = get_activation(name[1])
+        activation = get_activation(name)
         d_model = int(name[3])
         ff = int(name[4])
         alpha = float(name[2])
@@ -332,14 +335,14 @@ def get_graph(settings):
         d = [int(x) for x in d]
         return models.GraphATTNMP_dmodel_ff_dX(settings, d_model, ff, alpha, d, act=activation)
     elif name[0] == 'ATTNMPA':
-        activation = get_activation(name[1])
+        activation = get_activation(name)
         d_model = int(name[2])
         ff = int(name[3])
         d = name[4:]
         d = [int(x) for x in d]
         return models.GraphATTNMPA_dmodel_ff_dX(settings, d_model, ff, d, act=activation)
     elif name[0] == 'ATTNMPMH':
-        activation = get_activation(name[1])
+        activation = get_activation(name)
         d_model = int(name[3])
         ff = int(name[4])
         alpha = float(name[2])
