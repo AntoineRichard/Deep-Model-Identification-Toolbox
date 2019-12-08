@@ -41,10 +41,7 @@ class Settings:
         self.timestamp_idx     = None 
         self.continuity_idx    = None 
         # Reader
-        self.reader_style   = None
-        self.use_csv_reader = None 
-        self.source_header  = None 
-        self.target_header  = None 
+        self.reader_mode   = None
         # Training settings
         self.batch_size     = None 
         self.max_iterations = None 
@@ -98,7 +95,7 @@ class Settings:
         parser.add_argument('--timestamp_idx', type=int, required=False, help='Index of the timestamp if present in the data')
         parser.add_argument('--continuity_idx', type=int, required=False, help='Index of the continuity bit if present in the data')
         # Reader
-        parser.add_argument('--reader_style', type=str, default='classic', help='Chose the reader you want to use: classic, seq2seq, seq2seq_rnn')
+        parser.add_argument('--reader_mode', type=str, default='classic', help='Chose the reader you want to use: classic, seq2seq, continuous_seq2seq')
         # Training settings 
         parser.add_argument('--batch_size', type=int, default='32', help='size of the batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
@@ -151,7 +148,7 @@ class Settings:
         self.timestamp_idx     = args.timestamp_idx
         self.continuity_idx    = args.continuity_idx
         # Reader
-        self.reader_style   = args.reader_style
+        self.reader_mode   = args.reader_mode
         # Training settings
         self.batch_size     = args.batch_size
         self.max_iterations = args.max_iterations
