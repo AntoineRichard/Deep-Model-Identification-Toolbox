@@ -2,7 +2,7 @@ import os
 import h5py as h5
 import numpy as np
 import csv
-#TODO DOCU
+
 #TODO Unify sequence_generator and trajectory generator
 
 class H5Reader:
@@ -400,8 +400,12 @@ class H5Reader_Seq2Seq(H5Reader):
     continuity idx), and split it using the settings chosen by the user.
     Since we aim to apply our models to MPC, our models will be
     evaluated on multistep predictions (build on their predictions) 
-    hence this reader also generates trajectories. This Reader formats
-    the dataset for seq2seq processing.
+    hence this reader also generates trajectories.
+    
+    This Reader formats the dataset for seq2seq processing. Here seq2seq
+    means that given a sequence of input composed of an history of system
+    states and commands sent to it. The output will be an equally long
+    sequence of states shifted of one timestep further in time.
     """
     def __init__(self, settings):
         super(H5Reader_Seq2Seq, self).__init__(settings)
@@ -490,6 +494,16 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
     evaluated on multistep predictions (build on their predictions) 
     hence this reader also generates trajectories. This reader provides
     support for continuous time RNNs and seq2seq processing.
+
+    This readers provide continuous seq2seq sequence reading. It is
+    specifically designed to be used with recurrent neural-networks
+    such as RNNs, LSTMs, and GRUs who use a hidden-state variable. This
+    framework maximises the temporal continuity of the read sequences
+    so that the hidden-state of the neural network doesn't have to be
+    reseted too often. When a reset is needed a flag is raised to warn
+    the high level feeder.
+
+    More about seq2seq processing in H5Reader_Seq2Seq.
     """
     def __init__(self, settings):
         super(H5Reader_Seq2Seq_RNN, self).__init__(settings)
@@ -781,6 +795,17 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         return nx, ny, traj_c
 
     def augment_seq(self, x, y, continuity, size):
+        """
+        Augments the data by rolling it. As detailed in the description of
+        the object our main interest here is to maximise the continuity of
+        our sequences. However, to do that we can not perform one point 
+        striding, but have to perform a stride of the size of the sequence
+        hence the first point of the new sequence is located just after
+        the last point of the previous sequence. To augment our data 
+        we take the whole of our previous dataset shift it one step further
+        in time and concatenate it to the previous one. This operation is
+        done as much time as there are points in the sequence.
+        """
         xstack = []
         ystack = []
         cstack = []
