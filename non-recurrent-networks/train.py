@@ -22,9 +22,10 @@ import network_generator
 
 
 
-class UniformTraining:
+class Training_Uniform:
     """
-    Training container, extended for advanced priorization schemes.
+    Training container in its most basic form. Used to train and evaluate the
+    neural networks performances.
     """
     def __init__(self, settings):
         # Setting object
@@ -257,53 +258,26 @@ class UniformTraining:
                 if i%250 == 0: #TODO Custom display
                     self.display(i, acc, worse, acc_t)
             self.dump_logs()
-"""
-class PERTraining(UniformTraining):
+
+class Training_Continuous_Seq2Seq(Training_Uniform):
+    """
+    Training container in its most basic form. Used to train and evaluate the
+    neural networks performances.
+    """
     def __init__(self):
-        super(PERTraining, self).__init__()
-        # Load Sampler
-        self.sampler = None
-        self.load_sampler()
-
-    def load_sampler(self):
-        #TODO integrate setting object in sampler
-        self.SR = sampler_v2.PERSampler(self.DS, alpha = self.sts.alpha, beta = self.sts.beta, e = self.sts.epsilon)
-
-    def train_per():
-        w_i, batch_xs, batch_ys = self.SR.sample_train_batch(self.batch_size)
-        _ = sess.run(self.M.train_step, feed_dict = {self.M.x:batch_xs,
-                                                     self.M.y:batch_ys,
-                                                     self.M.weights: w_i,
-                                                     self.M.keep_prob: self.sts.dropout,
-                                                     self.M.step: i,
-                                                     self.M.is_training: True})
-
-class GradTraining(UniformTraining):
-    def __init__(self):
-        super(GradTraining, self).__init__()
-
-    def load_sampler(self):
-        #TODO integrate setting object in sampler
-        self.SR = sampler_v2.GradSampler(self.DS)
-
-    def train_grad():
-        w_i_scoring = np.ones(self.ss_bs)
-        prct, ss_batch_xs, ss_batch_ys = sampler.sample_superbatch(self.ss_bs)
-        score = sess.run(grads, feed_dict = {x:ss_batch_xs, y:ss_batch_ys, keep_prob: 1.0, step: i, weights:w_i_scoring})
-        idxs, w_i = sampler.sample_scored_batch(self.ss_bs, self.bs, score)
-        batch_xs, batch_ys = sampler.train_batch_RNN(idxs)
-        _ = sess.run(train_step, feed_dict = {x:batch_xs, y:batch_ys, keep_prob: 1.0, step: i, weights:w_i})
-"""
-
-class LSTMTraining(UniformTraining):
-    def __init__(self):
-        super(LSTMTraining, self).__init__()
+        super(Training_Continuous_Seq2Seq, self).__init__()
     
     def load_dataset(self):
+        """
+        Instantiate the dataset-reader object based on user inputs.
+        See the settings object for more information.
+        """
         self.DS = readers.H5Reader_Seq2Seq_RNN(self.sts)
 
     def load_sampler(self):
-        #TODO integrate setting object in sampler
+        """
+        Instantiate the sampler object
+        """
         self.SR = samplers.LSTMSampler(self.DS)
 
     def train_step(self, i):
@@ -315,8 +289,6 @@ class LSTMTraining(UniformTraining):
         Input:
             i : the current step (int)
         """
-        # Training on training set
-        # Sample new training batch
         prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
         _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
                                                           self.M.y: batch_ys,
@@ -326,8 +298,13 @@ class LSTMTraining(UniformTraining):
                                                           self.M.is_training: True})
 
     def eval_on_train(self, i):
-        # Single-Step performance evaluation on training set
-        # Sample new large train batch
+        """
+        Evaluation Step: Samples a new batch and perform forward pass. The sampler here
+        is independant from the training one. Also logs information about training 
+        performance in a list.
+        Input:
+            i : the current step (int)
+        """
         #TODO REMOVE MAGIC NUMBER (1000) in eval train batch set default argument ?
         prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch(1000)
         # Computes accuracy and loss + acquires summaries
@@ -413,3 +390,100 @@ class LSTMTraining(UniformTraining):
             self.saver.save(self.sess, NN_save_name)
         return error_x, worse
 
+class Training_Seq2Seq(Training_Uniform):
+    def __init__(self):
+        super(Training_Seq2Seq, self).__init__()
+    
+    def load_dataset(self):
+        self.DS = readers.H5Reader_Seq2Seq_RNN(self.sts)
+
+    def load_sampler(self):
+        #TODO integrate setting object in sampler
+        self.SR = samplers.LSTMSampler(self.DS)
+
+    def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
+        # Multi step performance evaluation on validation set
+        predictions = []
+        # Sample trajectory batch out of the evaluation set
+        batch_x, batch_y = self.SR.sample_val_trajectory()
+        # Take only the first elements of the trajectory
+        full = batch_x[:,:self.sts.sequence_length,:]
+        # Run iterative predictions
+        for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
+            # Get predictions
+            pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
+                                                    self.M.keep_prob:self.sts.dropout,
+                                                    self.M.weights: np.ones(full.shape[0]),
+                                                    self.M.is_training: False,
+                                                    self.M.step: i})
+            predictions.append(np.expand_dims(pred, axis=1))
+            # Remove first elements of old batch add predictions
+            # concatenated with the next command input
+            cmd = batch_x[:, k+1, -self.sts.cmd_dim:]
+            new = np.concatenate((pred, cmd), axis=1)
+            new = np.expand_dims(new, axis=1)
+            old = full[:,1:,:]
+            full = np.concatenate((old,new), axis=1)
+        predictions = np.concatenate(predictions, axis = 1)
+        # Compute per variable error
+        error_x = [SK_MSE(predictions[:,:,k], batch_y[:,:-1,k]) for k in range(predictions.shape[-1])]
+        worse = np.max(error_x)
+        avg = np.mean(error_x)
+        # Update multistep hard-logs
+        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
+        self.test_logs_multi_step.append([i] + [elapsed_time] + list(error_x) + [worse])
+        # Update inner variable
+        if avg < self.best_ms:
+            self.best_ms = avg
+            NN_save_name = os.path.join(self.sts.model_ckpt,'Best_MS')
+            self.saver.save(self.sess, NN_save_name)
+        if worse < self.lw_ms:
+            self.lw_ms = worse
+            NN_save_name = os.path.join(self.sts.model_ckpt,'Least_Worse_MS')
+            self.saver.save(self.sess, NN_save_name)
+        return error_x, worse
+
+class Training_PER(Training_Uniform):
+    def __init__(self):
+        super(Training_PER, self).__init__()
+    
+    def train_step(self, i):
+        """
+        Training step: Samples a new batch, perform forward and backward pass.
+        Please note that the networks take a large amount of placeholders as 
+        input. They are not necessarily used they are here to maximize
+        compatibility between the differemt models, and priorization schemes.
+        Input:
+            i : the current step (int)
+        """
+        # Training on training set
+        # Sample new training batch
+        prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
+        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
+                                                          self.M.y: batch_ys,
+                                                          self.M.weights: np.ones(self.sts.batch_size),
+                                                          self.M.keep_prob: self.sts.dropout,
+                                                          self.M.step: i,
+                                                          self.M.is_training: True})
+class Training_GRAD(Training_Uniform):
+    def __init__(self):
+        super(Training_GRAD, self).__init__()
+    
+    def train_step(self, i):
+        """
+        Training step: Samples a new batch, perform forward and backward pass.
+        Please note that the networks take a large amount of placeholders as 
+        input. They are not necessarily used they are here to maximize
+        compatibility between the differemt models, and priorization schemes.
+        Input:
+            i : the current step (int)
+        """
+        # Training on training set
+        # Sample new training batch
+        prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
+        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
+                                                          self.M.y: batch_ys,
+                                                          self.M.weights: np.ones(self.sts.batch_size),
+                                                          self.M.keep_prob: self.sts.dropout,
+                                                          self.M.step: i,
+                                                          self.M.is_training: True})
