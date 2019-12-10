@@ -278,7 +278,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         """
         Instantiate the sampler object
         """
-        self.SR = samplers.LSTMSampler(self.DS)
+        self.SR = samplers.RNNSampler(self.DS)
 
     def train_step(self, i):
         """
@@ -444,8 +444,18 @@ class Training_Seq2Seq(Training_Uniform):
         return error_x, worse
 
 class Training_PER(Training_Uniform):
+    """
+    Training container with the Priorized Experience Replay scheme. Used to train
+    and evaluate the neural networks performances.
+    """
     def __init__(self):
         super(Training_PER, self).__init__()
+    
+    def load_sampler(self):
+        """
+        Instantiate the sampler object
+        """
+        self.SR = samplers.PERSampler(self.DS, self.sts)
     
     def train_step(self, i):
         """
@@ -456,34 +466,70 @@ class Training_PER(Training_Uniform):
         Input:
             i : the current step (int)
         """
-        # Training on training set
-        # Sample new training batch
-        prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
-        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
-                                                          self.M.y: batch_ys,
-                                                          self.M.weights: np.ones(self.sts.batch_size),
+        if i%self.per_refresh_rate == 0:
+            self.SR.reset_for_update()
+            loss = []
+            try:
+                while True:
+                    batch_loss = self.sess.run(self.M.loss,
+                                           feed_dict = {self.M.x: batch_x,
+                                                        self.M.y: batch_y,
+                                                        self.M.weights: np.ones(self.sts.batch_size),
+                                                        self.M.keep_prob: self.sts.dropout,
+                                                        self.M.step: i,
+                                                        self.M.is_training: True})
+                    loss.append(batch_loss)
+            except:
+                loss = np.squeeze(np.array(loss))
+                self.SR.update_weights(loss)
+    
+        batch_x, batch_y, weights = self.SR.sample_train_batch(self.sts.batch_size)
+        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_x,
+                                                          self.M.y: batch_y,
+                                                          self.M.weights: weights,
                                                           self.M.keep_prob: self.sts.dropout,
                                                           self.M.step: i,
                                                           self.M.is_training: True})
 class Training_GRAD(Training_Uniform):
+    """
+    Training container with a Gradient Upperbound priorization scheme. Used to
+    train and evaluate the neural networks performances.
+    """
     def __init__(self):
         super(Training_GRAD, self).__init__()
     
+    def load_sampler(self):
+        """
+        Instantiate the sampler object
+        """
+        self.SR = samplers.GRADSampler(self.DS, self.sts)
+   
     def train_step(self, i):
         """
         Training step: Samples a new batch, perform forward and backward pass.
         Please note that the networks take a large amount of placeholders as 
         input. They are not necessarily used they are here to maximize
         compatibility between the differemt models, and priorization schemes.
+        This training step leverages the Gradient-UpperBound priorization
+        scheme: A superbatch is first sampled and the norm of the gradient of
+        the network is used to evaluate the importance of each samples.
+        Then we resample from that superbatch a batch using the value of the
+        gradient of each sample as the sampling distribution. This introduces
+        a bias in the learning process which canceled by weighting the loss.
         Input:
             i : the current step (int)
         """
-        # Training on training set
-        # Sample new training batch
-        prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
-        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
-                                                          self.M.y: batch_ys,
+        prct, superbatch_x, superbatch_sy = self.SR.sample_superbatch()
+        G = self.sess.run(self.M.grad, feed_dict = {self.M.x: superbatch_x,
+                                                          self.M.y: superbatch_y,
                                                           self.M.weights: np.ones(self.sts.batch_size),
+                                                          self.M.keep_prob: self.sts.dropout,
+                                                          self.M.step: i,
+                                                          self.M.is_training: True})
+        batch_x, batch_y, weights = self.SR.sample_train_batch(self.sts.batch_size, superbatch_x, superbatch_y, G)
+        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_x,
+                                                          self.M.y: batch_y,
+                                                          self.M.weights: weights,
                                                           self.M.keep_prob: self.sts.dropout,
                                                           self.M.step: i,
                                                           self.M.is_training: True})

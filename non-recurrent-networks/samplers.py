@@ -135,64 +135,98 @@ class PERSampler(UniformSampler):
     A sampler based on the gradient prioritized experience replay
     priorization scheme.
     """
-    def __init__(self, Dataset, alpha = 0.6, beta = 0.4, e = 0.0000001):
-        super(PERSampler, self).__init__()
+    def __init__(self, Dataset, Settings):
+        super(PERSampler, self).__init__(Dataset, Settings)
         self.DS = Dataset
+        self.sts = Settings
         
         # PER related parameters
-        self.sample_weigth = np.ones(self.DS.test_size)
-        self.P = np.ones(self.DS.test_size)
-        self.e = e
-        self.alpha = alpha
-        self.beta = beta
+        self.sample_weigth = np.ones(self.DS.train_size)
+        # No-priorization initialization
+        self.P = np.ones(self.DS.train_size)/self.DS.train_size
+        self.weights = np.ones(self.DS.train_size)
+    
+    def sample(self, x, y, batch_size):
+        """
+        Sample function: Create a sampler object that lasts
+        for an epoch. After that it needs to be refreshed (python2)
+        or regerated (python3).
+        Usage:
+          Create object: sampler = self.sample(x,y,bs)
+          Request next batch: iteration, bx, by = next(sampler)
+          Refresh object: Re-create the object.
+          A try catch loop makes this process more convenient.
+
+        Input:
+            x:  the full input dataset 
+            y:  the full target dataset
+            bs: the desired size of the outputed batches
+        Output:
+            A generator object (see usage)
+        """
+        # Generates batches
+        X = []
+        Y = []
+        for i in range(int(x.shape[0]/batch_size)):
+            X.append(x[i*batch_size:(i+1)*batch_size,:,:])
+            Y.append(y[i*batch_size:(i+1)*batch_size,:,:])
+        x = np.array(X)
+        y = np.array(Y)
+        max_iter = x.shape[0]
+        # Yield based loop: Generator
+        for i in range(max_iter):
+            yield [i*1./max_iter, x[i], y[i]]
 
     def update_weights(self, loss):
         """
         This function updates the priorization weights and sampling
         probabilities.
+        Input:
+           loss: A loss vector for the whole dataset
         """
-        Err = np.sqrt(loss) + self.e
-        V = np.power(Err,self.alpha)
+        Err = np.sqrt(loss) + self.sts.epsilon
+        V = np.power(Err, self.alpha)
         self.P = V/np.sum(V)
         self.sample_weigth = np.power(len(self.P)*self.P,-self.beta)
 
     def sample_for_update(self):
-        x = self.DS.train_x
-        y = self.DS.train_y
-        return x, y
+        return next(self.SS)
+    
+    def reset_for_update(self):
+        self.SS = sample(self.sts.superbatch_size)
 
     def sample_train_batch(self, batch_size):
         while True:
             idxs = np.random.choice(self.DS.train_size, batch_size, p=self.P)
             x = DS.train_x[idxs]
             y = DS.train_y[idxs]
-            yield [x, y]
+            yield [x, y, weights]
 
 class GRADSampler(UniformSampler):
     """
     A sampler based on the gradient upper-bound sample priorization scheme.
     """
-    def __init__(self, Dataset):
-        super(PERSampler, self).__init__()
-        self.DS = Dataset
+    def __init__(self, Dataset, Settings):
+        super(PERSampler, self).__init__(Dataset, Settings)
 
-    def sample_train_batch(self, idxs):
-        x = self.DS.train_x[idxs]
-        y = self.DS.train_y[idxs]
-        return x, y
+    def sample_train_batch(self, x, y, G):
+        idx, weights = self.score_batch(G)
+        x = x[idxs]
+        y = y[idxs]
+        w = weights[idxs]
+        return idx, w
 
-    def sample_superbatch(self, superbatch_size):
+    def sample_superbatch(self):
         try:
             return next(self.SS)
         except:
-            self.SS = sample(superbatch_size)
+            self.SS = sample(self.sts.superbatch_size)
             return next(self.SS)
 
-    def score_batch(self, superbatch_size, batch_size, score):
+    def score_batch(self, score):
         p = score/np.sum(score)
-        ids = np.random.choice(superbatch_size, batch_size, p=p[0])
-        idxs = self.original_indices[ids]
-        probs = p[0][ids]*superbatch_size
+        idxs = np.random.choice(self.sts.superbatch_size, self.sts.batch_size, p=p[0])
+        probs = p[0][idxs]*self.sts.superbatch_size
         return idxs, 1./probs
 
 
@@ -202,7 +236,7 @@ class RNNSampler(UniformSampler):
     LSTMs. (Only the sampling function is modified)
     """
     def __init__(self, Dataset):
-        super(RNNSampler, self).__init__(Dataset)
+        super(RNNSampler, self).__init__(Dataset, Settings)
         self.DS = Dataset
 
     def sample(self, x, y, continuity, batch_size):
