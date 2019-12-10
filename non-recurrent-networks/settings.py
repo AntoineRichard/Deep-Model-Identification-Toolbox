@@ -29,6 +29,8 @@ class Settings:
         self.alpha   = None 
         self.beta    = None 
         self.epsilon = None 
+        self.update_batchsize = None
+        self.per_refresh_rate = None
         # Grad settings
         self.superbatch_size = None
         # Data settings
@@ -80,10 +82,11 @@ class Settings:
         # Priorization settings
         parser.add_argument('--priorization', type=str, default='uniform', help='chose between the different type of optimization. uniform, PER or grad.')
         # PER settings
-        parser.add_argument('--alpha', type=float, required=False, help='Alpha parameter as in PER by Schaul. (a value between 0 and 1)')
-        parser.add_argument('--beta', type=float, required=False, help='Beta parameter as in PER by Schaul. (a value between 0 and 1)')
-        parser.add_argument('--epsilon', type=float, required=False, help='Epsilon as in PER by Schaul.')
+        parser.add_argument('--alpha', type=float, required=False, help='Alpha parameter as in PER by Schaul. (a value between 0 and +inf)')
+        parser.add_argument('--beta', type=float, required=False, help='Beta parameter as in PER by Schaul. (a value between 0 and +inf)')
+        parser.add_argument('--epsilon', type=float, default = 0.0000001, help='Epsilon as in PER by Schaul.')
         parser.add_argument('--per_refresh_rate', type=int, required=False, help='Amount of steps after which the priorization weights have to be refreshed.')
+        parser.add_argument('--update_batchsize', type=int, required=False, help='Size of the batch when updating weights')
         # Grad settings
         parser.add_argument('--superbatch_size', type=int, required=False, default='256', help='size of the super batch if using gradient upper-bound priorization scheme')
         # Data settings
@@ -136,6 +139,8 @@ class Settings:
         self.alpha   = args.alpha
         self.beta    = args.beta
         self.epsilon = args.epsilon
+        self.update_batchsize = args.update_batchsize
+        self.per_refresh_rate = args.per_refresh_rate
         # Grad settings
         self.superbatch_size = args.superbatch_size
         # Data settings
