@@ -46,10 +46,11 @@ def select_train_object(sts):
     return train_mode
 
 def check_if_completed(sts):
-    
+    raise Exception('Not implemented')
 
     
 if __name__ == "__main__":
     settings = Settings()
+    check_if_completed(sts)
     select_train_object(settings)
 
