@@ -9,40 +9,40 @@ def select_train_object(sts):
         if name[0] in seq2seq:
             raise Exception('The selected model family : '+name[0]+' does not support '+sts.reader_mode+'.')
         else:
-            if priorization == 'uniform':
+            if sts.priorization == 'uniform':
                 train.Training_Uniform(sts)
-            elif ((priorization == 'PER') or (priorization == 'per')):
+            elif ((sts.priorization == 'PER') or (sts.priorization == 'per')):
                 train.Training_PER(sts)
-            elif ((priorization == 'GRAD') or (priorization == 'grad')):
+            elif ((sts.priorization == 'GRAD') or (sts.priorization == 'grad')):
                 train.training_GRAD(sts)
             else:
-                raise Exception('Unknown priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
+                raise Exception('Unknown sts.priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
     elif sts.reader_mode == 'seq2seq':
         if name[0] in seq2pts:
             raise Exception('The selected model family : '+name[0]+' does not support '+sts.reader_mode+'.')
         else:
-            if priorization == 'uniform':
+            if sts.priorization == 'uniform':
                 train.Training_Seq2Seq(sts)
-            elif ((priorization == 'PER') or (priorization == 'per')):
+            elif ((sts.priorization == 'PER') or (sts.priorization == 'per')):
                 raise Exception('PER is not yet supported for seq2seq models.')
-            elif ((priorization == 'GRAD') or (priorization == 'grad')):
+            elif ((sts.priorization == 'GRAD') or (sts.priorization == 'grad')):
                 raise Exception('Gradient upperbound is not yet supported for seq2seq models.')
             else:
-                raise Exception('Unknown priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
+                raise Exception('Unknown sts.priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
     elif sts.reader_mode == 'continuous_seq2seq':
         if name[0] in seq2pts:
             raise Exception('The selected model family : '+name[0]+' does not support '+sts.reader_mode+'.')
         else:
-            if priorization == 'uniform':
+            if sts.priorization == 'uniform':
                 train.Training_Continuous_Seq2Seq(sts)
-            elif ((priorization == 'PER') or (priorization == 'per')):
+            elif ((sts.priorization == 'PER') or (sts.priorization == 'per')):
                 raise Exception('PER is not yet supported for seq2seq models.')
                 train_mode = 'per_continuous_seq2seq'
-            elif ((priorization == 'GRAD') or (priorization == 'grad')):
+            elif ((sts.priorization == 'GRAD') or (sts.priorization == 'grad')):
                 raise Exception('Gradient upperbound is not yet supported for seq2seq models.')
                 train_mode = 'grad_continuous_seq2seq'
             else:
-                raise Exception('Unknown priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
+                raise Exception('Unknown sts.priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
     else:
         raise Exception('Unknown reader mode. Currently supported modes are: classic, seq2seq, continuous_seq2seq')
 

@@ -154,7 +154,7 @@ class Training_Uniform:
         # Return accuracy for console display
         return acc
     
-    def get_predictions(full):
+    def get_predictions(self, full, i):
         """
         Get the predictions of the network.
         Input:
@@ -170,7 +170,7 @@ class Training_Uniform:
                                                      self.M.step: i})
         return pred
 
-    def eval_multistep(predictions, batch_y):
+    def eval_multistep(self, predictions, batch_y, i):
         """
         Input:
             predictions: a batch of predictions in the form [Batch_size x Trajectory_size - Sequence_size x Output_size]
@@ -212,7 +212,7 @@ class Training_Uniform:
         full = batch_x[:,:self.sts.sequence_length,:]
         # Run iterative predictions
         for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
-            pred = self.get_prediction_multistep(full)
+            pred = self.get_predictions(full, i)
             predictions.append(np.expand_dims(pred, axis=1))
             # Remove first elements of old batch add predictions
             # concatenated with the next command input
@@ -223,7 +223,7 @@ class Training_Uniform:
             full = np.concatenate((old,new), axis=1)
         predictions = np.concatenate(predictions, axis = 1)
         # Compute per variable error
-        return self.eval_multistep(predicitons, batch_y)
+        return self.eval_multistep(predictions, batch_y, i)
 
     def display(self, i, acc, worse, ms_acc):
         """
@@ -366,7 +366,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         # Return accuracy for console display
         return acc
         
-    def get_predictions(full):
+    def get_predictions(self, full, i):
         """
         Get the predictions of the network.
         Input:
@@ -398,7 +398,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         full = batch_x[:,:self.sts.sequence_length,:]
         # Run iterative predictions
         for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
-            pred = self.get_predictions(full)
+            pred = self.get_predictions(full, i)
             predictions.append(np.expand_dims(pred, axis=1))
             # Remove first elements of old batch add predictions
             # concatenated with the next command input
@@ -408,7 +408,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
             old = full[:,1:,:]
             full = np.concatenate((old,new), axis=1)
         predictions = np.concatenate(predictions, axis = 1)
-        return self.eval_multistep(predicitons, batch_y)
+        return self.eval_multistep(predicitons, batch_y, i)
 
 class Training_Seq2Seq(Training_Uniform):
     def __init__(self, Settings):
@@ -426,7 +426,7 @@ class Training_Seq2Seq(Training_Uniform):
         """
         self.SR = samplers.UniformSampler(self.DS, self.sts)
 
-    def get_predictions(full):
+    def get_predictions(self, full, i):
         """
         Get the predictions of the network.
         Input:

@@ -66,7 +66,7 @@ class UniformSampler:
         try:
             return next(self.TB)
         except:
-            self.TB = self.sample(self.DS.train_x, self.DS.train_y, self.batch_size)
+            self.TB = self.sample(self.DS.train_x, self.DS.train_y, self.sts.batch_size)
             return next(self.TB)
     
     def sample_eval_train_batch(self):

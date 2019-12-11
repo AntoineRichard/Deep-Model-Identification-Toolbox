@@ -5,7 +5,7 @@ It comes with a command line model generator, for MLPs, 1D CNNs, RNNs, LSTMs, GR
 Additionnaly this toolbox provide support for advanced data handling such as continuous-time seq2seq.
 Finally, Deep ID implements the most common tools for proper model evaluation such has k-fold Cross Validation,
 singlestep and multistep error evaluation along with a TensorBoard backend for visualization. 
-With over 40 parameters available from command line Deep ID is extremely flexible making grid searches for optimal
+With over 35 parameters available from command line Deep ID is extremely flexible making grid searches for optimal
 parameters easy and efficient. More about Deep ID below.
 
 ## Using DeepID
@@ -94,9 +94,9 @@ contain any do not set this argument.
 
 - **--batch\_size** *BatchSize* ``int``. The size of the training batch. Typical value 64.
 - **--val\_batch\_size** *ValidationBatchSize* ``int`` **OPTIONAL**. The size of the batch when validating. Typical value 2000.
- If not set will use the whole of the validation set.
+ If not set it will use the whole of the validation set.
 - **--test\_batch\_size** *TestBatchSize* ``int`` **OPTIONAL**. The size of the batch when testing. Typical value 2000. If not set
-will use the whole of the test set.
+it will use the whole of the test set.
 - **--max\_iterations** *MaxIteration* ``int``. The number of iteration to run for. Typical value 30000.
 - **--log\_frequency** *LogFrequency* ``int``. The Loging frequency (how often the network performances are going
  to be evaluated). Typical value 25.
