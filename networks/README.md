@@ -37,7 +37,7 @@ To feed the argument and start training use the following command:
 
 python3 rules.py ''The list of arguments''
 
-### Data Related arguments
+### Data-Loading arguments
 
 The framework offers 3 options to load data. However all those options requires the data to be 
 in the HDF5 format with the following structure:
@@ -52,28 +52,49 @@ No matter how many datafile you want to train one they have to be placed inside 
 
 There are 3 data options:
 - **3 Folders**: for train, test and validation. To use this option simply add the following arguments:
-   - **--train\_data** /Path/2/Train/Folder
-   - **--test\_data** /Path/2/Test/Folder
-   - **--val\_data** /Path/2/Val/Folder
+   - **--train\_data** /Path/2/Train/Folder (str)
+   - **--test\_data** /Path/2/Test/Folder (str)
+   - **--val\_data** /Path/2/Val/Folder (str)
 - **Ratio**: where the test in a ratio of the original data, and the val a ratio of the remaining data.
 to use this option add the following arguments. Where TestRatio and ValRatio are values between 0 and 1. Setting the TestRatio to 0.2
 would mean that 20% of the data is going to be allocated to the test set. Setting the ValRatio to 0.1 would 
 mean that out of the reaming 80% of the data 10% are going to be allocated to the validation set.
-   - **--train\_data** /Path/2/Train/Folder
-   - **--test\_ratio** TestRatio
-   - **--val\_ratio** ValRatio
+   - **--train\_data** /Path/2/Train/Folder (str)
+   - **--test\_ratio** TestRatio (float)
+   - **--val\_ratio** ValRatio (float)
 - **Cross Validation**: this option applies the well known cross validation onto the data. To use this mode add
 the following arguments. The number of folds corresponds to the number of slices your data
 is going to be cutted into, and the Test and Validation indexes corresponds to which slices are going to be used
 for test and validation. Please not that the validation index can be equal to the test index, and both data will be
-different. more about cross validation on Google.
-   - **--train\_data** Path/2/Train/Folder
-   - **--use\_cross\_validation** True
-   - **--folds** NumberOfFolds
-   - **--test\_idx** TestIndex
-   - **--val\_idx** ValidationIndex
+different. More about cross validation on Google.
+   - **--train\_data** Path/2/Train/Folder (str)
+   - **--use\_cross\_validation** True (bool)
+   - **--folds** NumberOfFolds (int)
+   - **--test\_idx** TestIndex (int)
+   - **--val\_idx** ValidationIndex (int)
+
+### Data-Settings arguments
+
+The formating of the data is made whithin thr reader. it can be modified through the following parameters:
+
+- **--max\_sequence\_size** SizeOfTheSequence (int). The SizeOfTheSequence corresponds to the size of the
+ history of State/Commands that are going to be fed to the network. Typical value 12.
+- **--forecast** SizeForecast (int). The amount of forecast step that the network should be trained for. 
+Typical value 1.
+- **--trajectory\_length** TrajectoryLength (int). The number of iterative forecasting step that will be
+performed in multistep evaluation. Typical value 20.
+- **--input\_dim** InputDim (int). The size of the input vector (states dimensions + commands dimensions).
+- **--output\_dim** OutputDim (int). The size of the output vector (states dimensions)
+- **--timestamp\_idx** TimestampIndex (**OPTIONAL**, int). The index of the TimeStamp; if the dataset does not contain
+any do not set this argument. 
+- **--continuity\_idx** ContinuityIndex (**OPTIONAL**, int). The index of the continuity bit; if the dataset does not
+contain any do not set this argument.
 
 ### 
+
+
+> Please note that as of today forecasting farther than 1 time step is not well supported.
+Please leave this setting to one.
 
 ##Models
 
