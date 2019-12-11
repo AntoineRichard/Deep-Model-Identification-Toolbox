@@ -52,45 +52,57 @@ No matter how many datafile you want to train one they have to be placed inside 
 
 There are 3 data options:
 - **3 Folders**: for train, test and validation. To use this option simply add the following arguments:
-   - **--train\_data** /Path/2/Train/Folder (str)
-   - **--test\_data** /Path/2/Test/Folder (str)
-   - **--val\_data** /Path/2/Val/Folder (str)
+   - **--train\_data** */Path/2/Train/Folder* ``str``
+   - **--test\_data** */Path/2/Test/Folder* ``str``
+   - **--val\_data** */Path/2/Val/Folder* ``str``
 - **Ratio**: where the test in a ratio of the original data, and the val a ratio of the remaining data.
 to use this option add the following arguments. Where TestRatio and ValRatio are values between 0 and 1. Setting the TestRatio to 0.2
 would mean that 20% of the data is going to be allocated to the test set. Setting the ValRatio to 0.1 would 
 mean that out of the reaming 80% of the data 10% are going to be allocated to the validation set.
-   - **--train\_data** /Path/2/Train/Folder (str)
-   - **--test\_ratio** TestRatio (float)
-   - **--val\_ratio** ValRatio (float)
+   - **--train\_data** */Path/2/Train/Folder* ``str``
+   - **--test\_ratio** *TestRatio* ``float``
+   - **--val\_ratio** *ValRatio* ``float``
 - **Cross Validation**: this option applies the well known cross validation onto the data. To use this mode add
 the following arguments. The number of folds corresponds to the number of slices your data
 is going to be cutted into, and the Test and Validation indexes corresponds to which slices are going to be used
 for test and validation. Please not that the validation index can be equal to the test index, and both data will be
 different. More about cross validation on Google.
-   - **--train\_data** Path/2/Train/Folder (str)
-   - **--use\_cross\_validation** True (bool)
-   - **--folds** NumberOfFolds (int)
-   - **--test\_idx** TestIndex (int)
-   - **--val\_idx** ValidationIndex (int)
+   - **--train\_data** *Path/2/Train/Folder* ``str``
+   - **--use\_cross\_validation** *True* ``bool``
+   - **--folds** *NumberOfFolds* ``int``
+   - **--test\_idx** *TestIndex* ``int``
+   - **--val\_idx** *ValidationIndex* ``int``
 
 ### Data-Settings arguments
 
 The formating of the data is made whithin thr reader. it can be modified through the following parameters:
 
-- **--max\_sequence\_size** SizeOfTheSequence (int). The SizeOfTheSequence corresponds to the size of the
+- **--max\_sequence\_size** *SizeOfTheSequence* ``int``. The SizeOfTheSequence corresponds to the size of the
  history of State/Commands that are going to be fed to the network. Typical value 12.
-- **--forecast** SizeForecast (int). The amount of forecast step that the network should be trained for. 
+- **--forecast** *SizeForecast* ``int``. The amount of forecast step that the network should be trained for. 
 Typical value 1.
-- **--trajectory\_length** TrajectoryLength (int). The number of iterative forecasting step that will be
+- **--trajectory\_length** *TrajectoryLength* ``int``. The number of iterative forecasting step that will be
 performed in multistep evaluation. Typical value 20.
-- **--input\_dim** InputDim (int). The size of the input vector (states dimensions + commands dimensions).
-- **--output\_dim** OutputDim (int). The size of the output vector (states dimensions)
-- **--timestamp\_idx** TimestampIndex (**OPTIONAL**, int). The index of the TimeStamp; if the dataset does not contain
+- **--input\_dim** *InputDim* ``int``. The size of the input vector (states dimensions + commands dimensions).
+- **--output\_dim** *OutputDim* ``int``. The size of the output vector (states dimensions)
+- **--timestamp\_idx** *TimestampIndex* ``int`` **OPTIONAL**. The index of the TimeStamp; if the dataset does not contain
 any do not set this argument. 
-- **--continuity\_idx** ContinuityIndex (**OPTIONAL**, int). The index of the continuity bit; if the dataset does not
+- **--continuity\_idx** *ContinuityIndex* ``int`` **OPTIONAL**. The index of the continuity bit; if the dataset does not
 contain any do not set this argument.
 
-### 
+### Training-Settings arguments
+
+- **--batch\_size** *BatchSize* ``int``. The size of the training batch. Typical value 64.
+- **--val\_batch\_size** *ValidationBatchSize* ``int`` **OPTIONAL**. The size of the batch when validating. Typical value 2000.
+ If not set will use the whole of the validation set.
+- **--test\_batch\_size** *TestBatchSize* ``int`` **OPTIONAL**. The size of the batch when testing. Typical value 2000. If not set
+will use the whole of the test set.
+- **--max\_iterations** *MaxIteration* ``int``. The number of iteration to run for. Typical value 30000.
+- **--log\_frequency** *LogFrequency* ``int``. The Loging frequency (how often the network performances are going
+ to be evaluated). Typical value 25.
+- **--learning\_rate** *LearningRate* ``float``. The learning rate value: Typical value 0.001.
+- **--dropout** *Dropout* ``float`` **OPTIONAL**. The dropout value if it is not used then don't set it.
+
 
 
 > Please note that as of today forecasting farther than 1 time step is not well supported.
