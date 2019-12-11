@@ -45,11 +45,13 @@ class Settings:
         # Reader
         self.reader_mode   = None
         # Training settings
-        self.batch_size     = None 
-        self.max_iterations = None 
-        self.log_frequency  = None 
-        self.learning_rate  = None 
-        self.dropout        = None
+        self.batch_size      = None 
+        self.val_batch_size  = None
+        self.test_batch_size = None
+        self.max_iterations  = None 
+        self.log_frequency   = None 
+        self.learning_rate   = None 
+        self.dropout         = None
         # Model
         self.model       = None
         self.restore     = None
@@ -100,7 +102,9 @@ class Settings:
         # Reader
         parser.add_argument('--reader_mode', type=str, default='classic', help='Chose the reader you want to use: classic, seq2seq, continuous_seq2seq')
         # Training settings 
-        parser.add_argument('--batch_size', type=int, default='32', help='size of the batch')
+        parser.add_argument('--batch_size', type=int, default='32', help='size of the train batch')
+        parser.add_argument('--val_batch_size', type=int, help='size of the validation batch')
+        parser.add_argument('--test_batch_size', type=int, help='size of the test batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
         parser.add_argument('--log_frequency', type=int, default='25', help='Loging frequency in batch.')
         parser.add_argument('--learning_rate', type=float, default='0.005', help='the learning rate')
@@ -155,11 +159,13 @@ class Settings:
         # Reader
         self.reader_mode   = args.reader_mode
         # Training settings
-        self.batch_size     = args.batch_size
-        self.max_iterations = args.max_iterations
-        self.log_frequency  = args.log_frequency
-        self.learning_rate  = args.learning_rate
-        self.dropout        = args.dropout
+        self.batch_size      = args.batch_size
+        self.val_batch_size  = args.val_batch_size
+        self.test_batch_size = args.test_batch_size
+        self.max_iterations  = args.max_iterations
+        self.log_frequency   = args.log_frequency
+        self.learning_rate   = args.learning_rate
+        self.dropout         = args.dropout
         # Model
         self.model       = args.model
         self.restore     = args.restore
