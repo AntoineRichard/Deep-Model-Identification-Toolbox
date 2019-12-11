@@ -24,7 +24,7 @@ is articulated around 5 main blocks:
 - [Samplers: sampler.py][]
 - [Models: models.py][Models]
 - [Training Loops: train.py][]
-- [A network generator: network\_generator.py models.py][Models]
+- [A network generator: network\_generator.py models.py](#Models)
 
 ## Settings
 
