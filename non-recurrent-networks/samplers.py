@@ -16,6 +16,7 @@ class UniformSampler:
     """
     def __init__(self, Dataset, Settings):
         self.DS = Dataset
+        self.sts = Settings
         
     def sample(self, x, y, batch_size):
         """
@@ -134,8 +135,6 @@ class PERSampler(UniformSampler):
     """
     def __init__(self, Dataset, Settings):
         super(PERSampler, self).__init__(Dataset, Settings)
-        self.DS = Dataset
-        self.sts = Settings
         
         # PER related parameters
         self.sample_weigth = np.ones(self.DS.train_size)
@@ -234,7 +233,6 @@ class RNNSampler(UniformSampler):
     """
     def __init__(self, Dataset):
         super(RNNSampler, self).__init__(Dataset, Settings)
-        self.DS = Dataset
 
     def sample(self, x, y, continuity, batch_size):
         """

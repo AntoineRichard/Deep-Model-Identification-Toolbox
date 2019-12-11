@@ -21,9 +21,9 @@ class Training_Uniform:
     Training container in its most basic form. Used to train and evaluate the
     neural networks performances.
     """
-    def __init__(self, settings):
+    def __init__(self, Settings):
         # Setting object
-        self.sts = settings
+        self.sts = Settings
         # Dataset object
         self.DS = None
         self.load_dataset()
@@ -279,8 +279,8 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
     Training container with support for continuous time seq2seq processing.
     Used to train and evaluate the neural networks performances.
     """
-    def __init__(self):
-        super(Training_Continuous_Seq2Seq, self).__init__()
+    def __init__(self, Settings):
+        super(Training_Continuous_Seq2Seq, self).__init__(Settings)
     
     def load_dataset(self):
         """
@@ -411,8 +411,8 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         return self.eval_multistep(predicitons, batch_y)
 
 class Training_Seq2Seq(Training_Uniform):
-    def __init__(self):
-        super(Training_Seq2Seq, self).__init__()
+    def __init__(self, Settings):
+        super(Training_Seq2Seq, self).__init__(Settings)
     
     def load_dataset(self):
         """
@@ -424,7 +424,7 @@ class Training_Seq2Seq(Training_Uniform):
         """
         Instantiate the sampler object
         """
-        self.SR = samplers.LSTMSampler(self.DS, self.sts)
+        self.SR = samplers.UniformSampler(self.DS, self.sts)
 
     def get_predictions(full):
         """
@@ -447,8 +447,8 @@ class Training_PER(Training_Uniform):
     Training container with the Priorized Experience Replay scheme. Used to train
     and evaluate the neural networks performances.
     """
-    def __init__(self):
-        super(Training_PER, self).__init__()
+    def __init__(self, Settings):
+        super(Training_PER, self).__init__(Settings)
     
     def load_sampler(self):
         """
@@ -494,8 +494,8 @@ class Training_GRAD(Training_Uniform):
     Training container with a Gradient Upperbound priorization scheme. Used to
     train and evaluate the neural networks performances.
     """
-    def __init__(self):
-        super(Training_GRAD, self).__init__()
+    def __init__(self, Settings):
+        super(Training_GRAD, self).__init__(Settings)
     
     def load_sampler(self):
         """
