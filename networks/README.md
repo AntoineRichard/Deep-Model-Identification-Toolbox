@@ -19,11 +19,12 @@ are defined in the section Models.
 
 This section covers the different element of the framework and how they interact. As of now the framework
 is articulated around 5 main blocks:
-- An argument Parser: settings.py
-- Datasets Readers: reader.py
-- Samplers: sampler.py
-- Training Loops: train.py
-- A network generator: network\_generator.py models.py
+- [An argument Parser: settings.py][Settings]
+- [Datasets Readers: reader.py][]
+- [Samplers: sampler.py][]
+- [Models: models.py][Models]
+- [Training Loops: train.py][]
+- [A network generator: network\_generator.py models.py][Models]
 
 ## Settings
 
