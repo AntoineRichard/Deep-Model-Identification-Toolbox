@@ -14,7 +14,7 @@ class UniformSampler:
     for multistep prediction. To do so we also store 2 other generators that sample
     trajectories (instead of a single point)
     """
-    def __init__(self, Dataset):
+    def __init__(self, Dataset, Settings):
         self.DS = Dataset
         
     def sample(self, x, y, batch_size):
@@ -36,10 +36,7 @@ class UniformSampler:
             A generator object (see usage)
         """
         # Shuffle the dataset synchronously
-        s = np.arange(x.shape[0])
-        np.random.shuffle(s)
-        x = x[s].copy()
-        y = y[s].copy()
+        x, y = self.shuffle(x, y)
         # Generates batches
         X = []
         Y = []
@@ -60,7 +57,7 @@ class UniformSampler:
         y = y[s].copy()
         return x, y
 
-    def sample_train_batch(self, bs):
+    def sample_train_batch(self):
         """
         This function returns the train batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
@@ -68,46 +65,46 @@ class UniformSampler:
         try:
             return next(self.TB)
         except:
-            self.TB = self.sample(self.DS.train_x, self.DS.train_y, bs)
+            self.TB = self.sample(self.DS.train_x, self.DS.train_y, self.batch_size)
             return next(self.TB)
     
-    def sample_eval_train_batch(self, bs):
+    def sample_eval_train_batch(self):
         """
         This function returns the train batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
-        if bs is None:
+        if self.sts.val_batch_size is None:
             return self.shuffle(self.DS.val_x, self.DS.val_y)
         try:
             return next(self.TBE)
         except:
-            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, bs)
+            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, self.sts.val_batch_size)
             return next(self.TBE)
      
-    def sample_test_batch(self, bs=None):
+    def sample_test_batch(self):
         """
         This function returns the test batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
-        if bs is None:
+        if self.sts.test_batch_size is None:
             return self.shuffle(self.DS.val_x, self.DS.val_y)
         try:
             return next(self.TeB)
         except:
-            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, bs)
+            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, self.sts.test_batch_size)
             return next(self.TeB)
 
-    def sample_val_batch(self, bs=None):
+    def sample_val_batch(self):
         """
         This function returns the val batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
-        if bs is None:
+        if self.sts.val_batch_size is None:
             return self.shuffle(self.DS.val_x, self.DS.val_y)
         try:
             return next(self.TvB)
         except:
-            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, bs)
+            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, self.sts.val_batch_size)
             return next(self.TvB)
     
     def sample_val_trajectory(self):
@@ -233,7 +230,7 @@ class GRADSampler(UniformSampler):
 class RNNSampler(UniformSampler):
     """
     A sampler derived from the Uniform sampler but well suited for continuous time-series
-    LSTMs. (Only the sampling function is modified)
+    RNNs. (Only the sampling function is modified)
     """
     def __init__(self, Dataset):
         super(RNNSampler, self).__init__(Dataset, Settings)
@@ -275,7 +272,7 @@ class RNNSampler(UniformSampler):
         for i in range(max_iter):
             yield [i*1./max_iter, x[i], y[i], c[i]]
     
-    def sample_train_batch(self, bs):
+    def sample_train_batch(self):
         """
         This function returns the train batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
@@ -283,10 +280,10 @@ class RNNSampler(UniformSampler):
         try:
             return next(self.TB)
         except:
-            self.TB = self.sample(self.DS.train_x, self.DS.train_y, self.DS.train_sc, bs)
+            self.TB = self.sample(self.DS.train_x, self.DS.train_y, self.DS.train_sc, self.sts.batch_size)
             return next(self.TB)
     
-    def sample_eval_train_batch(self, bs):
+    def sample_eval_train_batch(self):
         """
         This function returns the train batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
@@ -294,7 +291,7 @@ class RNNSampler(UniformSampler):
         try:
             return next(self.TBE)
         except:
-            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, self.DS.train_sc, bs)
+            self.TBE = self.sample(self.DS.train_x, self.DS.train_y, self.DS.train_sc, self.sts.val_batch_size)
             return next(self.TBE)
      
     def sample_test_batch(self, bs=None):
@@ -305,7 +302,7 @@ class RNNSampler(UniformSampler):
         try:
             return next(self.TeB)
         except:
-            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, self.DS.test_sc, bs)
+            self.TeB = self.sample(self.DS.test_x, self.DS.test_y, self.DS.test_sc, self.sts.test_batch_size)
             return next(self.TeB)
 
     def sample_val_batch(self, bs=None):
@@ -316,7 +313,7 @@ class RNNSampler(UniformSampler):
         try:
             return next(self.TvB)
         except:
-            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, self.DS.val_sc, bs)
+            self.TvB = self.sample(self.DS.val_x, self.DS.val_y, self.DS.val_sc, self.sts.val_batch_size)
             return next(self.TvB)
     
     def sample_val_trajectory(self):
