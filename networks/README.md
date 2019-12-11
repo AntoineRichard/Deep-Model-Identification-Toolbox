@@ -77,7 +77,7 @@ different. more about cross validation on Google.
 
 ### 
 
-## Models
+##Models
 
 This section covers the available models and how to invoke them from the command line argument.
 
