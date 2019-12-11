@@ -50,16 +50,26 @@ Theoritically the timestamp and the continuity idx can be placed anywhere in the
 No matter how many datafile you want to train one they have to be placed inside a folder (even if there is only one)
 
 There are 3 data options:
-- 3 Folders: for train, test and validation. To use this option simply add the following arguments
-train\_data /Path/2/Train/Folder --test\_data /Path/2/Test/Folder --val\_data /Path/2/Val/Folder
+- 3 Folders: for train, test and validation. To use this option simply add the following arguments:
+   - --train\_data /Path/2/Train/Folder
+   - --test\_data /Path/2/Test/Folder
+   - --val\_data /Path/2/Val/Folder
 - Ratio: where the test in a ratio of the original data, and the val a ratio of the remaining data.
-to use this option add the following arguments --train\_data /Path/2/Train/Folder --test\_ratio TestRatio
---val\_ratio ValRatio. Where TestRatio and ValRatio are values between 0 and 1. Setting the TestRatio to 0.2
+to use this option add the following arguments:
+   - --train\_data /Path/2/Train/Folder
+   -  --test\_ratio TestRatio
+   - --val\_ratio ValRatio
+Where TestRatio and ValRatio are values between 0 and 1. Setting the TestRatio to 0.2
 would mean that 20% of the data is going to be allocated to the test set. Setting the ValRatio to 0.1 would 
 mean that out of the reaming 80% of the data 10% are going to be allocated to the validation set.
 - Cross Validation: this option applies the well known cross validation onto the data. To use this mode add
-the following arguments --train\_data Path/2/Train/Folder --use\_cross\_validation True --folds NumberOfFolds
---test\_idx TestIndex --val\_idx ValidationIndex. The number of folds corresponds to the number of slices your data
+the following arguments:
+   - --train\_data Path/2/Train/Folder
+   - --use\_cross\_validation True
+   - --folds NumberOfFolds
+   - --test\_idx TestIndex
+   - --val\_idx ValidationIndex
+The number of folds corresponds to the number of slices your data
 is going to be cutted into, and the Test and Validation indexes corresponds to which slices are going to be used
 for test and validation. Please not that the validation index can be equal to the test index, and both data will be
 different. more about cross validation on Google.
