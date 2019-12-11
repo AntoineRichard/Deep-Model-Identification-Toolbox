@@ -14,13 +14,7 @@ import network_generator
 
 #TODO fix depecrated for full binding with TensorFlow 1.14.0
 #TODO TEST model weight and inference time
-
-
-
-
 #TODO use MSE instead of RMSE
-
-
 
 class Training_Uniform:
     """
@@ -45,19 +39,15 @@ class Training_Uniform:
 
     def load_dataset(self):
         """
-        Instantiate the dataset-reader object based on user inputs.
-        See the settings object for more information.
+        Instantiate the dataset-reader object.
         """
-        if self.sts.reader_style=='seq2seq':
-            self.DS = readers.H5Reader_Seq2Seq(self.sts)
-        else:
-            self.DS = readers.H5Reader(self.sts)
+        self.DS = readers.H5Reader(self.sts)
 
     def load_sampler(self):
         """
         Instantiate the sampler object
         """
-        self.SR = samplers.UniformSampler(self.DS)
+        self.SR = samplers.UniformSampler(self.DS, self.sts)
 
     def load_model(self):
         """
@@ -102,7 +92,7 @@ class Training_Uniform:
         Input:
             i : the current step (int)
         """
-        prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
+        prct, batch_xs, batch_ys = self.SR.sample_train_batch()
         _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
                                                           self.M.y: batch_ys,
                                                           self.M.weights: np.ones(self.sts.batch_size),
@@ -118,8 +108,7 @@ class Training_Uniform:
         Input:
             i : the current step (int)
         """
-        #TODO REMOVE MAGIC NUMBER (1000) in eval train batch set default argument ?
-        prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch(1000)
+        prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
         # Computes accuracy and loss + acquires summaries
         acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
@@ -142,8 +131,6 @@ class Training_Uniform:
         Input:
             i : the current step (int)
         """
-        # Single-Step performance evaluation on validation set
-        # TODO set option full dataset or given batch size
         prct, batch_xs , batch_ys = self.SR.sample_val_batch() 
         # Computes accuracy and loss + acquires summaries
         acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
@@ -166,40 +153,32 @@ class Training_Uniform:
         self.test_writer.add_summary(summaries, i)
         # Return accuracy for console display
         return acc
-        
-    def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
+    
+    def get_predictions(full):
         """
-        Evaluation Step on Trajectories: Samples a new batch of trajectories to
-        evaluate the network on. Performs a forward pass and logs the
-        performance of the model on multistep predictions. If the models performed
-        better than ever before then save model.
+        Get the predictions of the network.
         Input:
-            i : the current step (int)
+            full: a batch of inputs in the form [Batch_size x Sequence_size x Input_size]
+        Output:
+            pred: the predictions associated with those batches in the
+                  form [Batch_size x Output_dim]
         """
-        # Multi step performance evaluation on validation set
-        predictions = []
-        # Sample trajectory batch out of the evaluation set
-        batch_x, batch_y = self.SR.sample_val_trajectory()
-        # Take only the first elements of the trajectory
-        full = batch_x[:,:self.sts.sequence_length,:]
-        # Run iterative predictions
-        for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
-            # Get predictions
-            pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
-                                                    self.M.keep_prob:self.sts.dropout,
-                                                    self.M.weights: np.ones(full.shape[0]),
-                                                    self.M.is_training: False,
-                                                    self.M.step: i})
-            predictions.append(np.expand_dims(pred, axis=1))
-            # Remove first elements of old batch add predictions
-            # concatenated with the next command input
-            cmd = batch_x[:, k+1, -self.sts.cmd_dim:]
-            new = np.concatenate((pred, cmd), axis=1)
-            new = np.expand_dims(new, axis=1)
-            old = full[:,1:,:]
-            full = np.concatenate((old,new), axis=1)
-        predictions = np.concatenate(predictions, axis = 1)
-        # Compute per variable error
+        pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
+                                                     self.M.keep_prob:self.sts.dropout,
+                                                     self.M.weights: np.ones(full.shape[0]),
+                                                     self.M.is_training: False,
+                                                     self.M.step: i})
+        return pred
+
+    def eval_multistep(predictions, batch_y):
+        """
+        Input:
+            predictions: a batch of predictions in the form [Batch_size x Trajectory_size - Sequence_size x Output_size]
+            batch_y: a batch of groundtruth in the form [Batch_size x Trajectory_size - Sequence_size x Output_size]
+        Output:
+
+        """
+        # Compute error
         error_x = [SK_MSE(predictions[:,:,k], batch_y[:,:-1,k]) for k in range(predictions.shape[-1])]
         worse = np.max(error_x)
         avg = np.mean(error_x)
@@ -216,16 +195,52 @@ class Training_Uniform:
             NN_save_name = os.path.join(self.sts.model_ckpt,'Least_Worse_MS')
             self.saver.save(self.sess, NN_save_name)
         return error_x, worse
+        
+    def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
+        """
+        Evaluation Step on Trajectories: Samples a new batch of trajectories to
+        evaluate the network on. Performs a forward pass and logs the
+        performance of the model on multistep predictions. If the models performed
+        better than ever before then save model.
+        Input:
+            i : the current step (int)
+        """
+        predictions = []
+        # Sample trajectory batch out of the validation set
+        batch_x, batch_y = self.SR.sample_val_trajectory()
+        # Take only the first elements of the trajectory
+        full = batch_x[:,:self.sts.sequence_length,:]
+        # Run iterative predictions
+        for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
+            pred = self.get_prediction_multistep(full)
+            predictions.append(np.expand_dims(pred, axis=1))
+            # Remove first elements of old batch add predictions
+            # concatenated with the next command input
+            cmd = batch_x[:, k+1, -self.sts.cmd_dim:]
+            new = np.concatenate((pred, cmd), axis=1)
+            new = np.expand_dims(new, axis=1)
+            old = full[:,1:,:]
+            full = np.concatenate((old,new), axis=1)
+        predictions = np.concatenate(predictions, axis = 1)
+        # Compute per variable error
+        return self.eval_multistep(predicitons, batch_y)
 
     def display(self, i, acc, worse, ms_acc):
-        # Simple console display every N iterations
+        """
+        Prints the current training status in the terminal
+        Input:
+            i: the current step (int)
+            acc: the accuracy in the form [Output_size]
+            worse: the worse accuracy (float)
+            ms_acc: the multistep accuracy [Output_size]
+        """
         print('Step: ', str(i), ', 1s acc:', str(acc), ', ', str(self.sts.trajectory_length),
                        's worse acc: ', str(worse), ', ',
                        str(self.sts.trajectory_length), 's avg acc: ', str(ms_acc))
 
     def dump_logs(self):
         """
-        Dump logs
+        Saves the logs of the training in npy format
         """
         # Save model weights at the end of training
         NN_save_name = os.path.join(self.sts.output_dir,'final_NN')
@@ -244,7 +259,7 @@ class Training_Uniform:
 
     def train(self):
         """
-        Training Loop
+        The training loop
         """
         with tf.Session() as self.sess:
             self.saver_init_and_restore()
@@ -261,8 +276,8 @@ class Training_Uniform:
 
 class Training_Continuous_Seq2Seq(Training_Uniform):
     """
-    Training container in its most basic form. Used to train and evaluate the
-    neural networks performances.
+    Training container with support for continuous time seq2seq processing.
+    Used to train and evaluate the neural networks performances.
     """
     def __init__(self):
         super(Training_Continuous_Seq2Seq, self).__init__()
@@ -278,7 +293,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         """
         Instantiate the sampler object
         """
-        self.SR = samplers.RNNSampler(self.DS)
+        self.SR = samplers.RNNSampler(self.DS, self.sts)
 
     def train_step(self, i):
         """
@@ -305,8 +320,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         Input:
             i : the current step (int)
         """
-        #TODO REMOVE MAGIC NUMBER (1000) in eval train batch set default argument ?
-        prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch(1000)
+        prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
         # Computes accuracy and loss + acquires summaries
         acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
@@ -322,9 +336,13 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         self.train_writer.add_summary(summaries, i)
 
     def eval_on_validation_single_step(self, i):
-        # Single-Step performance evaluation on validation set
-        # Sample a batch as the whole of the validation set
-        # TODO set option full dataset or given batch size
+        """
+        Evaluation Step: Samples a new batch out of the validation set and performs
+        a forward pass. Also logs the performance about the evaluation set. Saves
+        the model if it performed better than ever before.
+        Input:
+            i : the current step (int)
+        """
         prct, batch_xs , batch_ys = self.SR.sample_val_batch() 
         # Computes accuracy and loss + acquires summaries
         acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
@@ -348,8 +366,31 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         # Return accuracy for console display
         return acc
         
+    def get_predictions(full):
+        """
+        Get the predictions of the network.
+        Input:
+            full: a batch of inputs in the form [Batch_size x Sequence_size x Input_size]
+        Output:
+            pred: the predictions associated with those batches in the
+                  form [Batch_size x Output_dim]
+        """
+        pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
+                                                     self.M.keep_prob:self.sts.dropout,
+                                                     self.M.weights: np.ones(full.shape[0]),
+                                                     self.M.is_training: False,
+                                                     self.M.step: i})
+        return pred
+    
     def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
-        # Multi step performance evaluation on validation set
+        """
+        Evaluation Step on Trajectories: Samples a new batch of trajectories to
+        evaluate the network on. Performs a forward pass and logs the
+        performance of the model on multistep predictions. If the models performed
+        better than ever before then save model.
+        Input:
+            i : the current step (int)
+        """
         predictions = []
         # Sample trajectory batch out of the evaluation set
         batch_x, batch_y = self.SR.sample_val_trajectory()
@@ -357,12 +398,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         full = batch_x[:,:self.sts.sequence_length,:]
         # Run iterative predictions
         for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
-            # Get predictions
-            pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
-                                                    self.M.keep_prob:self.sts.dropout,
-                                                    self.M.weights: np.ones(full.shape[0]),
-                                                    self.M.is_training: False,
-                                                    self.M.step: i})
+            pred = self.get_predictions(full)
             predictions.append(np.expand_dims(pred, axis=1))
             # Remove first elements of old batch add predictions
             # concatenated with the next command input
@@ -372,76 +408,39 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
             old = full[:,1:,:]
             full = np.concatenate((old,new), axis=1)
         predictions = np.concatenate(predictions, axis = 1)
-        # Compute per variable error
-        error_x = [SK_MSE(predictions[:,:,k], batch_y[:,:-1,k]) for k in range(predictions.shape[-1])]
-        worse = np.max(error_x)
-        avg = np.mean(error_x)
-        # Update multistep hard-logs
-        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs_multi_step.append([i] + [elapsed_time] + list(error_x) + [worse])
-        # Update inner variable
-        if avg < self.best_ms:
-            self.best_ms = avg
-            NN_save_name = os.path.join(self.sts.model_ckpt,'Best_MS')
-            self.saver.save(self.sess, NN_save_name)
-        if worse < self.lw_ms:
-            self.lw_ms = worse
-            NN_save_name = os.path.join(self.sts.model_ckpt,'Least_Worse_MS')
-            self.saver.save(self.sess, NN_save_name)
-        return error_x, worse
+        return self.eval_multistep(predicitons, batch_y)
 
 class Training_Seq2Seq(Training_Uniform):
     def __init__(self):
         super(Training_Seq2Seq, self).__init__()
     
     def load_dataset(self):
-        self.DS = readers.H5Reader_Seq2Seq_RNN(self.sts)
+        """
+        Instantiate the dataset-reader object.
+        """
+        self.DS = readers.H5Reader_Seq2Seq(self.sts)
 
     def load_sampler(self):
-        #TODO integrate setting object in sampler
-        self.SR = samplers.LSTMSampler(self.DS)
+        """
+        Instantiate the sampler object
+        """
+        self.SR = samplers.LSTMSampler(self.DS, self.sts)
 
-    def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
-        # Multi step performance evaluation on validation set
-        predictions = []
-        # Sample trajectory batch out of the evaluation set
-        batch_x, batch_y = self.SR.sample_val_trajectory()
-        # Take only the first elements of the trajectory
-        full = batch_x[:,:self.sts.sequence_length,:]
-        # Run iterative predictions
-        for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
-            # Get predictions
-            pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
-                                                    self.M.keep_prob:self.sts.dropout,
-                                                    self.M.weights: np.ones(full.shape[0]),
-                                                    self.M.is_training: False,
-                                                    self.M.step: i})
-            predictions.append(np.expand_dims(pred, axis=1))
-            # Remove first elements of old batch add predictions
-            # concatenated with the next command input
-            cmd = batch_x[:, k+1, -self.sts.cmd_dim:]
-            new = np.concatenate((pred, cmd), axis=1)
-            new = np.expand_dims(new, axis=1)
-            old = full[:,1:,:]
-            full = np.concatenate((old,new), axis=1)
-        predictions = np.concatenate(predictions, axis = 1)
-        # Compute per variable error
-        error_x = [SK_MSE(predictions[:,:,k], batch_y[:,:-1,k]) for k in range(predictions.shape[-1])]
-        worse = np.max(error_x)
-        avg = np.mean(error_x)
-        # Update multistep hard-logs
-        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs_multi_step.append([i] + [elapsed_time] + list(error_x) + [worse])
-        # Update inner variable
-        if avg < self.best_ms:
-            self.best_ms = avg
-            NN_save_name = os.path.join(self.sts.model_ckpt,'Best_MS')
-            self.saver.save(self.sess, NN_save_name)
-        if worse < self.lw_ms:
-            self.lw_ms = worse
-            NN_save_name = os.path.join(self.sts.model_ckpt,'Least_Worse_MS')
-            self.saver.save(self.sess, NN_save_name)
-        return error_x, worse
+    def get_predictions(full):
+        """
+        Get the predictions of the network.
+        Input:
+            full: a batch of inputs in the form [Batch_size x Sequence_size x Input_size]
+        Output:
+            pred: the predictions associated with those batches in the
+                  form [Batch_size x Output_dim]
+        """
+        pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
+                                                     self.M.keep_prob:self.sts.dropout,
+                                                     self.M.weights: np.ones(full.shape[0]),
+                                                     self.M.is_training: False,
+                                                     self.M.step: i})
+        return pred
 
 class Training_PER(Training_Uniform):
     """
