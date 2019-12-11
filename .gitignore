@@ -1,9 +1,6 @@
 data
-training_scripts/results
-training_scripts/train_list*
 **.swp
 **.pyc
-training_scripts/__pycache__
-lstm_scripts/__pycache__
-lstm_scripts/results
-lstm_scripts/tensorboard
+networks/results
+netowrks/__pycache__
+networks/tensorboard
