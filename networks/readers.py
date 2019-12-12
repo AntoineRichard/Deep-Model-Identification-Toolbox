@@ -552,7 +552,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             # split the input and targets
             tmp_x, tmp_y = self.split_input_output(tmp)
             # generate trajectories
-            traj_x, traj_y, traj_idx = self.trajectory_generator(tmp_x, tmp_y)
+            traj_x, traj_y = self.trajectory_generator(tmp_x, tmp_y)
             # generates sequences for training
             tmp_x, tmp_y, seq_idx = self.sequence_generator(tmp_x, tmp_y)
             # append for concatenation
@@ -561,14 +561,12 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             data_x.append(tmp_x)
             data_y.append(tmp_y)
             seq_continuity.append(seq_idx)
-            traj_continuity.append(traj_idx)
         numpy_traj_x = np.concatenate((data_traj_x), axis=0)
         numpy_traj_y = np.concatenate((data_traj_y), axis=0)
         numpy_data_x = np.concatenate((data_x), axis=0)
         numpy_data_y = np.concatenate((data_y), axis=0)
         numpy_seq_c = np.concatenate((seq_continuity), axis=0)
-        numpy_traj_c = np.concatenate((traj_continuity), axis=0)
-        return numpy_data_x, numpy_data_y, numpy_traj_x, numpy_traj_y, numpy_seq_c, numpy_traj_c
+        return numpy_data_x, numpy_data_y, numpy_traj_x, numpy_traj_y, numpy_seq_c
     
     def split_var(self, x, continuity):
         """
@@ -632,7 +630,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         x_train, x_val = np.split(x,[int(-self.sts.val_ratio*x.shape[0])])
         return x_train, x_test, x_val
 
-    def cross_validation_split(self, x, y, x_traj, y_traj, seq_c, traj_c):
+    def cross_validation_split(self, x, y, x_traj, y_traj, seq_c):
         """
         Calls the spliting methode related to the K-Fold Cross Validation and applies it to
         the x, y, x_traj and y_traj
@@ -657,11 +655,11 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         """
         train_x, test_x, val_x, self.train_sc, self.test_sc, self.val_sc = self.split_var(x, seq_c)
         train_y, test_y, val_y = self.split_var(y)
-        _, test_traj_x, val_traj_x, _, self.test_c, self.val_c = self.split_var(x_traj, traj_c)
+        _, test_traj_x, val_traj_x, = self.split_var(x_traj)
         _, test_traj_y, val_traj_y = self.split_var(y_traj)
         return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
-    def ratio_based_split(self, x, y, traj_x, traj_y, seq_c, traj_c):
+    def ratio_based_split(self, x, y, traj_x, traj_y, seq_c):
         """
         Calls the spliting methode related to the ratio based split and applies it to
         the x, y, x_traj and y_traj
@@ -671,7 +669,6 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             x_traj : Generated trajectories in the form [N x Trajectory_size + Sequence_size x Input_size]
             y_traj : Generated trajectories in the from [N x Trajectory_size x Output_size]
             seq_c  : Sequence continuity indices
-            traj_c : Trajectorie continuity indices
         Output:
             train_x : The input training sequences [N x Sequence_size x Input_dim]
             train_y : The output training sequences [N x Forecast_size x Output_dim]
@@ -692,9 +689,6 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         self.train_sc[0] = False
         self.test_sc[0] = False
         self.val_sc[0] = False
-        _, self.test_tc, self.val_tc = self.split_var_ratio(traj_c)
-        self.test_tc[0] = False
-        self.val_tc[0] = False
         return train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y
 
     def sequence_generator(self, x, y):
@@ -748,51 +742,40 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
     
     def trajectory_generator(self, x, y):
         """
-        Generates a sequence of data to be fed to the network. Continuous RNN 
-        modification inolve handling inter-trajectories continuity. If two trajectories
-        follow each other without time discontinuity then the continuity boolean is set
-        to True, else False.
+        Generates a trajectory of data to be fed to the network in a Seq2Seq fashion.
         Input:
            x: The inputs in the form [N x Input_dim] or [N x 1 + Input_dim] 
            y: The outputs in the form [N x Output_dim] or [N x 1 + Output_dim]
         Output:
-           nx: Generated sequence in the form [N x Sequence_size x Input_dim]
-           ny: Generated sequence in the form [N x Forecast_size x Output_dim]
+           nx: Generated trajectory in the form [N x Trajectory_size + Sequence_size x Input_dim]
+           ny: Generated trajectory in the form [N x Trajectory_size + Sequence_size x Output_dim]
         """
         nX = []
         nY = []
-        traj_c = []
-
-        continuous = False
         
         # Stores the indices of all the variables but the continuity index
         value_x_idx = [xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]
         value_y_idx = [xx for xx in range(y.shape[1])if xx!=self.sts.continuity_idx]
-         
-        # x is a sequence, y is a sequence right after the sequence used as input
-        for i in range(0, x.shape[0]-1-self.sts.sequence_length-self.sts.trajectory_length, self.sts.sequence_length+self.sts.trajectory_length):
+        
+        # x is a sequence, y is the data-point or a sequence right after the sequence used as input
+        for i in range(x.shape[0]-1-self.sts.sequence_length-self.sts.trajectory_length):
             # First check continuity of the sequence if the flag is enabled
             if not (self.sts.continuity_idx is None):
                 # 1 sequence is continuous 0 otherwise.
                 vx = x[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
-                vy = y[i+1:i+1+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                vy = y[i+1+self.sequence_length:i+1+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
                 # Check sequence is fine, if not skip sequence.
                 if ((np.max(vx) > 1) or (np.max(vy) > 1)):
-                    continuous = False
                     continue
                 else:
-                    self.traj_c.append(continuous)
-                    nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length,value_x_idx])
-                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
-                    continuous = True
+                    nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length, value_x_idx])
+                    nY.append(y[i+1+self.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
             else:
-                traj_c.append(continuous)
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
                 nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
-                continuous = True
         nx = np.array(nX)
         ny = np.array(nY)
-        return nx, ny, traj_c
+        return nx, ny
 
     def augment_seq(self, x, y, continuity, size):
         """
@@ -818,10 +801,10 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                 rx = np.reshape(xy[0],[xy[0].shape[0]*xy[0].shape[1],xy[0].shape[2]])
                 ry = np.reshape(xy[1],[xy[1].shape[0]*xy[1].shape[1],xy[1].shape[2]])
                 # roll the sequence and remove the end (rolled over points)
-                rx = np.roll(rx,-i)[:-size]
-                ry = np.roll(ry,-i)[:-1]
+                rx = np.roll(rx,-i)[i:-size+i]
+                ry = np.roll(ry,-i)[i:-size+i]
                 rx = np.reshape(rx,[-1,size,self.sts.input_dim])
-                ry = np.reshape(ry,[-1,1,self.sts.output_dim])
+                ry = np.reshape(ry,[-1,size,self.sts.output_dim])
                 xstack.append(rx)
                 ystack.append(ry)
                 rc = np.ones(rx.shape[0], dtype=np.int) == 1
@@ -838,37 +821,29 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         Build the dataset and splits it based on user input
         """
         # Load each dataset
-        train_x, train_y, traj_x, traj_y, seq_c, traj_c = self.load(self.sts.train_dir)
-        print(train_y.shape)
+        train_x, train_y, traj_x, traj_y, seq_c = self.load(self.sts.train_dir)
         if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
             if self.sts.use_X_val:
                 raise('Cannot use cross-validation with separated directory for training validation and testing.')
             else:
-                test_x, test_y, test_traj_x, test_traj_y, test_seq_c, test_traj_c = self.load(self.sts.test_dir)
-                val_x, val_y, val_traj_x, val_traj_y, val_seq_c, val_traj_c = self.load(self.sts.val_dir)
+                test_x, test_y, self.test_traj_x, self.test_traj_y, test_seq_c = self.load(self.sts.test_dir)
+                val_x, val_y, self.val_traj_x, self.val_traj_y, val_seq_c = self.load(self.sts.val_dir)
         elif self.sts.test_dir is None and self.sts.val_dir is not None:
             raise('Test root was not provided but validation root was, provide none or both.')
         elif self.sts.val_dir is None and self.sts.test_dir is not None:
             raise('Validation root was not provided but test root was, provide none or both.')
         elif self.sts.use_X_val:
-            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.cross_validation_split(train_x, train_y, traj_x, traj_y, seq_c, traj_c)
+            train_x, train_y, test_x, test_y, val_x, val_y, self.test_traj_x, self.test_traj_y, self.val_traj_x, self.val_traj_y  = self.cross_validation_split(train_x, train_y, traj_x, traj_y, seq_c)
         else:
-            train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y, seq_c, traj_c)
+            train_x, train_y, test_x, test_y, val_x, val_y, self.test_traj_x, self.test_traj_y, self.val_traj_x, self.val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y, seq_c)
         
-        print(train_y.shape)
         # augment LSTMs data
         self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
-        #print(self.train_sc.shape)
         self.test_sc, self.test_x, self.test_y = self.augment_seq(test_x, test_y, self.test_sc, self.sts.sequence_length)
         self.val_sc, self.val_x, self.val_y = self.augment_seq(val_x, val_y, self.val_sc, self.sts.sequence_length)
-        self.test_tc, self.test_traj_x, self.test_traj_y = self.augment_seq(test_traj_x, test_traj_y, self.test_tc, self.sts.sequence_length+self.sts.trajectory_length)
-        self.val_tc, self.val_traj_x, self.val_traj_y = self.augment_seq(val_traj_x, val_traj_y, self.val_tc, self.sts.sequence_length+self.sts.trajectory_length)
         # normalize all dataset based on the train-set
         self.normalize(self.train_x, self.train_y, self.test_x, self.test_y, self.val_x, self.val_y, self.test_traj_x, self.test_traj_y, self.val_traj_x, self.val_traj_y)
         # get sizes
-        print(train_y.shape)
-        print(test_traj_y.shape)
-        exit(0)
         self.train_size = self.train_x.shape[0]
         self.test_size = self.test_x.shape[0]
         self.val_size = self.val_x.shape[0]
