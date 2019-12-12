@@ -19,7 +19,7 @@ def select_train_object(sts):
                 raise Exception('Unknown sts.priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
     elif sts.reader_mode == 'seq2seq':
         if name[0] in seq2pts:
-            raise Exception('The selected model family : '+name[0]+' does not support '+sts.reader_mode+'.')
+            raise Exception('The selected model family : '+name[0]+' does not support the '+sts.reader_mode+' reader mode.')
         else:
             if sts.priorization == 'uniform':
                 train.Training_Seq2Seq(sts)

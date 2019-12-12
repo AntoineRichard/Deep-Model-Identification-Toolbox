@@ -186,7 +186,7 @@ def RNN_Generator(name,settings):
             layer_param.append(0)
         else:
             raise ValueError('Error parsing model name: unknown word')
-    return models.GraphRNN(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation)
+    return models.GraphRNN(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation), hidden_state
 
 def GRU_Generator(name,settings):
     """

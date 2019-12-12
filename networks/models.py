@@ -478,8 +478,6 @@ class GraphRNN:
         self.states_series = self.first_series + self.second_series
         # FeedForward layers
         self.tensor_state = tf.transpose(tf.convert_to_tensor(self.states_series),[1,0,2])
-        #print(self.tensor_state.shape)
-        #exit(0)
         self.xc = self.tensor_state
         for i, layer in enumerate(layer_type):
             if layer == 'dense':
@@ -487,43 +485,10 @@ class GraphRNN:
             if layer == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
         self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
-        #print(self.y_.shape) 
-        #exit(0)
-        #with tf.name_scope('dense_1'):
-        #    W2 = tf.Variable(np.random.rand(self.settings.state_size, 16),dtype=tf.float32, name = 'weights')
-        #    b2 = tf.Variable(np.zeros((1,16)), dtype=tf.float32, name = 'bias')
-        #    self.x_series = [tf.matmul(state, W2) + b2 for state in self.states_series]
-        #with tf.name_scope('dense_2'):
-        #    W3 = tf.Variable(np.random.rand(16, self.settings.output_dim),dtype=tf.float32, name = 'weights')
-        #    b3 = tf.Variable(np.zeros((1,self.settings.output_dim)), dtype=tf.float32, name = 'bias')
-        #    self.logits_series = [tf.matmul(x, W3) + b3 for x in self.x_series]
-        # Loss
-        #with tf.name_scope('loss_op'):
-        #    self.losses = [tf.losses.huber_loss(logits,labels) for logits, labels in zip(self.logits_series,self.labels_series)]
-        #    self.logits = self.logits_series
-        #    self.loss = tf.reduce_mean(self.losses)
-        #with tf.name_scope('accuracy_op'):
-        #    self.accuracy = tf.reduce_mean([tf.square(tf.subtract(labels, logits)) for logits, labels in zip(self.logits_series, self.labels_series)])
-        #with tf.name_scope('train_step'):
-        #    self.train_step = tf.train.AdamOptimizer(self.settings.learning_rate).minimize(self.loss)
-
-
-        # Reshape
-        #self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
-        #self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
-        # Operations
-        #self.xc = self.xr
-        #for i, layer_type in enumerate(layers):
-        #    if layer_type == 'dense':
-        #        self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
-        #    if layer_type == 'dropout':
-        #        self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        #self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
-
-        # Loss
+        # Losses
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.y))
-            self.s_loss = tf.reduce_mean(self.diff, axis=1)
+            self.s_loss =  tf.reduce_mean(tf.reduce_mean(self.diff, axis=1),axis=1)
             self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
             tf.summary.scalar('w_loss', self.w_loss)
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))

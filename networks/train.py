@@ -294,6 +294,19 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         Instantiate the sampler object
         """
         self.SR = samplers.RNNSampler(self.DS, self.sts)
+    
+    def load_model(self):
+        """
+        Calls the network generator to load/generate the requested model.
+        Please note that the generation of models is still experimental 
+        and may change frequently. For more information have look at the
+        network_generator.
+        """
+        self.M, self.hidden_state = network_generator.get_graph(self.sts)
+        self.train_hs = np.zeros((2,self.sts.batch_size, self.hidden_state))
+        self.train_val_hs = np.zeros((2,self.sts.val_batch_size, self.hidden_state))
+        self.val_hs = np.zeros((2,self.sts.val_batch_size, self.hidden_state))
+        self.val_traj_hs = np.zeros((2,self.sts.val_traj_batch_size, self.hidden_state))
 
     def train_step(self, i):
         """
@@ -304,13 +317,16 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         Input:
             i : the current step (int)
         """
-        prct, batch_xs, batch_ys = self.SR.sample_train_batch(self.sts.batch_size)
-        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
-                                                          self.M.y: batch_ys,
-                                                          self.M.weights: np.ones(self.sts.batch_size),
-                                                          self.M.keep_prob: self.sts.dropout,
-                                                          self.M.step: i,
-                                                          self.M.is_training: True})
+        prct, batch_x, batch_y, continuity = self.SR.sample_train_batch()
+        self.train_hs = np.swapaxes(np.swapaxes(self.train_hs,1,2)*continuity,1,2)
+        _, self.train_hs = self.sess.run([self.M.train_step, self.M.current_state],
+                                          feed_dict = {self.M.x: batch_x,
+                                                       self.M.y: batch_y,
+                                                       self.M.hs: self.train_hs,
+                                                       self.M.weights: np.ones(self.sts.batch_size),
+                                                       self.M.keep_prob: self.sts.dropout,
+                                                       self.M.step: i,
+                                                       self.M.is_training: True})
 
     def eval_on_train(self, i):
         """
@@ -320,15 +336,18 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         Input:
             i : the current step (int)
         """
-        prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
+        prct, batch_xs, batch_ys, continuity = self.SR.sample_eval_train_batch()
+        self.train_val_hs = np.swapaxes(np.swapaxes(self.train_val_hs,1,2)*continuity,1,2)
         # Computes accuracy and loss + acquires summaries
-        acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
-                                        feed_dict = {self.M.x: batch_xs,
-                                                     self.M.y: batch_ys,
-                                                     self.M.weights: np.ones(batch_xs.shape[0]),
-                                                     self.M.keep_prob: self.sts.dropout,
-                                                     self.M.step: i,
-                                                     self.M.is_training: False})
+        acc, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+                                                                 self.M.merged, self.M.current_state],
+                                                                 feed_dict = {self.M.x: batch_xs,
+                                                                              self.M.y: batch_ys,
+                                                                              self.M.hs: self.train_val_hs,
+                                                                              self.M.weights: np.ones(batch_xs.shape[0]),
+                                                                              self.M.keep_prob: self.sts.dropout,
+                                                                              self.M.step: i,
+                                                                              self.M.is_training: False})
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         self.train_logs.append([i] + [elapsed_time] + list(acc))
@@ -343,15 +362,18 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         Input:
             i : the current step (int)
         """
-        prct, batch_xs , batch_ys = self.SR.sample_val_batch() 
+        prct, batch_xs , batch_ys, continuity = self.SR.sample_val_batch() 
+        self.val_hs = np.swapaxes(np.swapaxes(self.val_hs,1,2)*continuity,1,2)
         # Computes accuracy and loss + acquires summaries
-        acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
-                                        feed_dict = {self.M.x: batch_xs,
-                                                     self.M.y: batch_ys,
-                                                     self.M.weights: np.ones(batch_xs.shape[0]),
-                                                     self.M.keep_prob: self.sts.dropout,
-                                                     self.M.step: i,
-                                                     self.M.is_training: False})
+        acc, loss, summaries, self.val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+                                                           self.M.merged, self.M.current_state],
+                                                          feed_dict = {self.M.x: batch_xs,
+                                                                       self.M.y: batch_ys,
+                                                                       self.M.hs: self.val_hs,
+                                                                       self.M.weights: np.ones(batch_xs.shape[0]),
+                                                                       self.M.keep_prob: self.sts.dropout,
+                                                                       self.M.step: i,
+                                                                       self.M.is_training: False})
         # Update Single-Step hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         self.test_logs.append([i] + [elapsed_time]+list(acc))
@@ -366,7 +388,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         # Return accuracy for console display
         return acc
         
-    def get_predictions(self, full, i):
+    def get_predictions(self, full, hs, i):
         """
         Get the predictions of the network.
         Input:
@@ -375,12 +397,14 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
             pred: the predictions associated with those batches in the
                   form [Batch_size x Output_dim]
         """
-        pred = self.sess.run(self.M.y_, feed_dict = {self.M.x: full,
-                                                     self.M.keep_prob:self.sts.dropout,
-                                                     self.M.weights: np.ones(full.shape[0]),
-                                                     self.M.is_training: False,
-                                                     self.M.step: i})
-        return pred
+        pred, hs = self.sess.run([self.M.y_, self.M.mid_state],
+                                 feed_dict = {self.M.x: full,
+                                              self.M.hs: hs,
+                                              self.M.keep_prob:self.sts.dropout,
+                                              self.M.weights: np.ones(full.shape[0]),
+                                              self.M.is_training: False,
+                                              self.M.step: i})
+        return pred, hs
     
     def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
         """
@@ -396,9 +420,11 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         batch_x, batch_y = self.SR.sample_val_trajectory()
         # Take only the first elements of the trajectory
         full = batch_x[:,:self.sts.sequence_length,:]
+        hs = self.val_traj_hs
         # Run iterative predictions
         for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
-            pred = self.get_predictions(full, i)
+            pred, hs = self.get_predictions(full, hs, i)
+            pred = pred[:,-1,:]
             predictions.append(np.expand_dims(pred, axis=1))
             # Remove first elements of old batch add predictions
             # concatenated with the next command input
@@ -408,7 +434,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
             old = full[:,1:,:]
             full = np.concatenate((old,new), axis=1)
         predictions = np.concatenate(predictions, axis = 1)
-        return self.eval_multistep(predicitons, batch_y, i)
+        return self.eval_multistep(predictions, batch_y, i)
 
 class Training_Seq2Seq(Training_Uniform):
     def __init__(self, Settings):

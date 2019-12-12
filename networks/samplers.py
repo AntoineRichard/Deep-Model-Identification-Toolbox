@@ -241,7 +241,7 @@ class RNNSampler(UniformSampler):
     A sampler derived from the Uniform sampler but well suited for continuous time-series
     RNNs. (Only the sampling function is modified)
     """
-    def __init__(self, Dataset):
+    def __init__(self, Dataset, Settings):
         super(RNNSampler, self).__init__(Dataset, Settings)
 
     def sample(self, x, y, continuity, batch_size):

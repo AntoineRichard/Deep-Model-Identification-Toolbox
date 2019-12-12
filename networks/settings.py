@@ -55,9 +55,9 @@ class Settings:
         self.val_traj_batch_size  = None 
         self.test_traj_batch_size = None 
         # Model
-        self.model       = None
-        self.restore     = None
-        self.path_weight = None
+        self.model        = None
+        self.restore      = None
+        self.path_weight  = None
 
         ### RUN ###
         self.run()
