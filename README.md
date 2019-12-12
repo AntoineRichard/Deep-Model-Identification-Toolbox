@@ -13,8 +13,6 @@ parameters easy and efficient. More about Deep ID below.
 This section covers how to use the framework. The framework itself is detailed in section Framework, the models
 are defined in the section Models.
 
-###
-
 ## The Framework
 
 This section covers the different element of the framework and how they interact. As of now the framework
@@ -32,23 +30,23 @@ This section covers the different parameters that can be adjusted through comman
 
 ### General principle
 
-To ease the use of this tool we rely on argparse to parse the arguments provided by the user.
+To ease the use of this tool, we rely on argparse to parse the arguments provided by the user.
 To feed the argument and start training use the following command:
 
-python3 rules.py ''The list of arguments''
+python3 rules.py ''A list of arguments''
 
 ### Data-Loading arguments
 
-The framework offers 3 options to load data. However all those options requires the data to be 
+The framework offers 3 options to load data. However all those options require the data to be 
 in the HDF5 format with the following structure:
 - Each line is a new data point
 - The data must be chronologically ordered
-- On a line the data must have the following format: TimeStamp (optional), States, Commands
-- Additionally the data can contain a continuity idx: TimeStamp (optional), Continuity\_idx (optional), States, Commands.
+- On a line, the data must have the following format: TimeStamp (optional), States, Commands
+- Additionally the data can contain a continuity bit: TimeStamp (optional), Continuity\_bit (optional), States, Commands.
 
-Theoritically the timestamp and the continuity idx can be placed anywhere in the array, yet it is better to place them as shown above.
+Theoritically the timestamp and the continuity bit can be placed anywhere in the array, yet it is better to place them as shown above.
 
-No matter how many datafile you want to train one they have to be placed inside a folder (even if there is only one)
+No matter how many datafile you want to use, they have to be placed inside a folder (even if there is only one)
 
 There are 3 data options:
 - **3 Folders**: for train, test and validation. To use this option simply add the following arguments:
