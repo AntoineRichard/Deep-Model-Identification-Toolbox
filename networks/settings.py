@@ -90,7 +90,7 @@ class Settings:
         parser.add_argument('--per_refresh_rate', type=int, required=False, help='Amount of steps after which the priorization weights have to be refreshed.')
         parser.add_argument('--update_batchsize', type=int, required=False, help='Size of the batch when updating weights')
         # Grad settings
-        parser.add_argument('--superbatch_size', type=int, required=False, default='256', help='size of the super batch if using gradient upper-bound priorization scheme')
+        parser.add_argument('--superbatch_size', type=int, required=False, help='size of the super batch if using gradient upper-bound priorization scheme')
         # Data settings
         parser.add_argument('--max_sequence_size', type=int, default='12', help='number of points used to predict the outputs')
         parser.add_argument('--forecast', type=int, default='1', help='number of points to predict')
@@ -230,6 +230,24 @@ class Settings:
             if self.continuity_idx > self.timestamp_idx:
                 self.continuity_idx = self.continuity_idx - 1
 
+    def check_priorization(self):
+        if self.priorization == 'uniform':
+            pass
+        elif ((self.priorization == 'per') or (self.priorization == 'PER')):
+            if self.alpha is None:
+                raise Exception('Please set the alpha parameter when using the PER')
+            if self.beta is None:
+                raise Exception('Please set the beta parameter when using the PER')
+            if self.update_batchsize is None:
+                raise Exception('Please set the update_batchsize parameter when using the PER')
+            if self.per_refresh_rate is None:
+                raise Exception('Please set the per_refresh_rate parameter when using the PER')
+        elif ((self.priorization == 'grad') or (self.priorization == 'GRAD')):
+            if self.superbatch_size is None:
+                raise Exception('Please set the superbatch_size parameter when using the GRAD')
+        else:
+            raise Exception('Unknown priorization mode: currently supported mode are uniform (default), GRAD and PER.')
+
 
     def run(self):
         """
@@ -241,3 +259,4 @@ class Settings:
         self.check_and_generate_directories()
         self.check_X_val()
         self.check_idxs()
+        self.check_priorization()

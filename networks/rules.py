@@ -14,7 +14,7 @@ def select_train_object(sts):
             elif ((sts.priorization == 'PER') or (sts.priorization == 'per')):
                 train.Training_PER(sts)
             elif ((sts.priorization == 'GRAD') or (sts.priorization == 'grad')):
-                train.training_GRAD(sts)
+                train.Training_GRAD(sts)
             else:
                 raise Exception('Unknown sts.priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
     elif sts.reader_mode == 'seq2seq':

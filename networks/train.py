@@ -518,14 +518,14 @@ class Training_GRAD(Training_Uniform):
         Input:
             i : the current step (int)
         """
-        prct, superbatch_x, superbatch_sy = self.SR.sample_superbatch()
+        prct, superbatch_x, superbatch_y = self.SR.sample_superbatch()
         G = self.sess.run(self.M.grad, feed_dict = {self.M.x: superbatch_x,
-                                                          self.M.y: superbatch_y,
-                                                          self.M.weights: np.ones(self.sts.batch_size),
-                                                          self.M.keep_prob: self.sts.dropout,
-                                                          self.M.step: i,
-                                                          self.M.is_training: True})
-        batch_x, batch_y, weights = self.SR.sample_train_batch(self.sts.batch_size, superbatch_x, superbatch_y, G)
+                                                    self.M.y: superbatch_y,
+                                                    self.M.weights: np.ones(self.sts.superbatch_size),
+                                                    self.M.keep_prob: self.sts.dropout,
+                                                    self.M.step: i,
+                                                    self.M.is_training: True})
+        batch_x, batch_y, weights = self.SR.sample_train_batch(superbatch_x, superbatch_y, G[0])
         _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_x,
                                                           self.M.y: batch_y,
                                                           self.M.weights: weights,

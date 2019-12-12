@@ -203,26 +203,26 @@ class GRADSampler(UniformSampler):
     A sampler based on the gradient upper-bound sample priorization scheme.
     """
     def __init__(self, Dataset, Settings):
-        super(PERSampler, self).__init__(Dataset, Settings)
+        super(GRADSampler, self).__init__(Dataset, Settings)
 
     def sample_train_batch(self, x, y, G):
-        idx, weights = self.score_batch(G)
+        idxs, weights = self.score_batch(G)
         x = x[idxs]
         y = y[idxs]
-        w = weights[idxs]
-        return idx, w
+        w = weights
+        return x, y, w
 
     def sample_superbatch(self):
         try:
             return next(self.SS)
         except:
-            self.SS = sample(self.sts.superbatch_size)
+            self.SS = self.sample(self.DS.train_x, self.DS.train_y, self.sts.superbatch_size)
             return next(self.SS)
 
     def score_batch(self, score):
         p = score/np.sum(score)
-        idxs = np.random.choice(self.sts.superbatch_size, self.sts.batch_size, p=p[0])
-        probs = p[0][idxs]*self.sts.superbatch_size
+        idxs = np.random.choice(self.sts.superbatch_size, self.sts.batch_size, p=p)
+        probs = p[idxs]*self.sts.superbatch_size
         return idxs, 1./probs
 
 
