@@ -140,9 +140,9 @@ class PERSampler(UniformSampler):
         self.sample_weigth = np.ones(self.DS.train_size)
         # No-priorization initialization
         self.P = np.ones(self.DS.train_size)/self.DS.train_size
-        self.weights = np.ones(self.DS.train_size)
+        self.sample_weights = np.ones(self.DS.train_size)
     
-    def sample(self, x, y, batch_size):
+    def sample_per(self, x, y, batch_size):
         """
         Sample function: Create a sampler object that lasts
         for an epoch. After that it needs to be refreshed (python2)
@@ -166,12 +166,13 @@ class PERSampler(UniformSampler):
         for i in range(int(x.shape[0]/batch_size)):
             X.append(x[i*batch_size:(i+1)*batch_size,:,:])
             Y.append(y[i*batch_size:(i+1)*batch_size,:,:])
-        x = np.array(X)
-        y = np.array(Y)
-        max_iter = x.shape[0]
+        X.append(x[(i+1)*batch_size:,:,:])
+        Y.append(y[(i+1)*batch_size:,:,:])
+
+        max_iter = len(X)
         # Yield based loop: Generator
         for i in range(max_iter):
-            yield [i*1./max_iter, x[i], y[i]]
+            yield [i*1./max_iter, X[i], Y[i]]
 
     def update_weights(self, loss):
         """
@@ -181,22 +182,31 @@ class PERSampler(UniformSampler):
            loss: A loss vector for the whole dataset
         """
         Err = np.sqrt(loss) + self.sts.epsilon
-        V = np.power(Err, self.alpha)
+        V = np.power(Err, self.sts.alpha)
         self.P = V/np.sum(V)
-        self.sample_weigth = np.power(len(self.P)*self.P,-self.beta)
+        self.sample_weigths = np.power(len(self.P)*self.P,-self.sts.beta)
 
     def sample_for_update(self):
+        """
+        Samples a new batch to update the PER weights
+        """
         return next(self.SS)
     
     def reset_for_update(self):
-        self.SS = sample(self.sts.superbatch_size)
+        """
+        Regenerates the sampler to update the PER weights
+        """
+        self.SS = self.sample_per(self.DS.train_x, self.DS.train_y, self.sts.update_batchsize)
 
     def sample_train_batch(self, batch_size):
-        while True:
-            idxs = np.random.choice(self.DS.train_size, batch_size, p=self.P)
-            x = DS.train_x[idxs]
-            y = DS.train_y[idxs]
-            yield [x, y, weights]
+        """
+        Sample a train batch at random using the PER weights
+        """
+        idxs = np.random.choice(self.DS.train_size, batch_size, p=self.P)
+        x = self.DS.train_x[idxs]
+        y = self.DS.train_y[idxs]
+        weights = self.sample_weights[idxs]
+        return x, y, weights
 
 class GRADSampler(UniformSampler):
     """

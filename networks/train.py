@@ -465,23 +465,25 @@ class Training_PER(Training_Uniform):
         Input:
             i : the current step (int)
         """
-        if i%self.per_refresh_rate == 0:
+        # Update weights
+        if ((i%self.sts.per_refresh_rate == 0) and (i!=0)):
             self.SR.reset_for_update()
             loss = []
             try:
                 while True:
-                    batch_loss = self.sess.run(self.M.loss,
+                    prct, batch_x, batch_y = self.SR.sample_for_update()
+                    batch_loss = self.sess.run(self.M.s_loss,
                                            feed_dict = {self.M.x: batch_x,
                                                         self.M.y: batch_y,
-                                                        self.M.weights: np.ones(self.sts.batch_size),
+                                                        self.M.weights: np.ones(self.sts.update_batchsize),
                                                         self.M.keep_prob: self.sts.dropout,
                                                         self.M.step: i,
                                                         self.M.is_training: True})
                     loss.append(batch_loss)
             except:
-                loss = np.squeeze(np.array(loss))
+                loss = np.hstack(loss)
                 self.SR.update_weights(loss)
-    
+        # Train
         batch_x, batch_y, weights = self.SR.sample_train_batch(self.sts.batch_size)
         _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_x,
                                                           self.M.y: batch_y,
