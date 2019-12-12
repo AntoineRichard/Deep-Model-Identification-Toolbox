@@ -114,9 +114,9 @@ class UniformSampler:
         """
         s = np.arange(self.DS.val_traj_size)
         np.random.shuffle(s)
-        x = self.DS.val_traj_x[s]
-        y = self.DS.val_traj_y[s]
-        return x, y
+        x = self.DS.val_traj_x[s].copy()
+        y = self.DS.val_traj_y[s].copy()
+        return x[:self.sts.val_traj_batch_size], y[:self.sts.val_traj_batch_size]
     
     def sample_test_trajectory(self):
         """
@@ -124,9 +124,9 @@ class UniformSampler:
         """
         s = np.arange(self.DS.test_traj_size)
         np.random.shuffle(s)
-        x = self.DS.test_traj_x[s]
-        y = self.DS.test_traj_y[s]
-        return x, y
+        x = self.DS.test_traj_x[s].copy()
+        y = self.DS.test_traj_y[s].copy()
+        return x[:self.sts.test_traj_batch_size], y[:self.sts.test_traj_batch_size]
 
 class PERSampler(UniformSampler):
     """
@@ -328,14 +328,18 @@ class RNNSampler(UniformSampler):
         """
         This function returns the whole of the trajectory testing set.
         """
-        x = self.DS.val_traj_x
-        y = self.DS.val_traj_y
-        return x, y
+        s = np.arange(self.DS.val_traj_size)
+        np.random.shuffle(s)
+        x = self.DS.val_traj_x[s].copy()
+        y = self.DS.val_traj_y[s].copy()
+        return x[:self.sts.val_traj_batch_size], y[:self.sts.val_traj_batch_size]
     
     def sample_test_trajectory(self):
         """
         This function returns the whole of the trajectory validation set.
         """
-        x = self.DS.test_traj_x
-        y = self.DS.test_traj_y
-        return x, y
+        s = np.arange(self.DS.test_traj_size)
+        np.random.shuffle(s)
+        x = self.DS.test_traj_x[s].copy()
+        y = self.DS.test_traj_y[s].copy()
+        return x[:self.sts.test_traj_batch_size], y[:self.sts.test_traj_batch_size]

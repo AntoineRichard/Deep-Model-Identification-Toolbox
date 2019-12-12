@@ -52,6 +52,8 @@ class Settings:
         self.log_frequency   = None 
         self.learning_rate   = None 
         self.dropout         = None
+        self.val_traj_batch_size  = None 
+        self.test_traj_batch_size = None 
         # Model
         self.model       = None
         self.restore     = None
@@ -104,7 +106,9 @@ class Settings:
         # Training settings 
         parser.add_argument('--batch_size', type=int, default='32', help='size of the train batch')
         parser.add_argument('--val_batch_size', type=int, help='size of the validation batch')
+        parser.add_argument('--val_traj_batch_size', type=int, default = 1000, help='size of the trajectory validation batch')
         parser.add_argument('--test_batch_size', type=int, help='size of the test batch')
+        parser.add_argument('--test_traj_batch_size', type=int, default = 1000, help='size of the trajectory test batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
         parser.add_argument('--log_frequency', type=int, default='25', help='Loging frequency in batch.')
         parser.add_argument('--learning_rate', type=float, default='0.005', help='the learning rate')
@@ -166,6 +170,8 @@ class Settings:
         self.log_frequency   = args.log_frequency
         self.learning_rate   = args.learning_rate
         self.dropout         = args.dropout
+        self.val_traj_batch_size  = args.val_traj_batch_size
+        self.test_traj_batch_size = args.test_traj_batch_size
         # Model
         self.model       = args.model
         self.restore     = args.restore
