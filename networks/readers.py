@@ -837,10 +837,14 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         else:
             train_x, train_y, test_x, test_y, val_x, val_y, self.test_traj_x, self.test_traj_y, self.val_traj_x, self.val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y, seq_c)
         
-        # augment LSTMs data
-        self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
+        # augment RNNs data
+        #self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
+        self.train_x = train_x
+        self.train_y = train_y
         self.test_sc, self.test_x, self.test_y = self.augment_seq(test_x, test_y, self.test_sc, self.sts.sequence_length)
-        self.val_sc, self.val_x, self.val_y = self.augment_seq(val_x, val_y, self.val_sc, self.sts.sequence_length)
+        #self.val_sc, self.val_x, self.val_y = self.augment_seq(val_x, val_y, self.val_sc, self.sts.sequence_length)
+        self.val_x = val_x
+        self.val_y = val_y
         # normalize all dataset based on the train-set
         self.normalize(self.train_x, self.train_y, self.test_x, self.test_y, self.val_x, self.val_y, self.test_traj_x, self.test_traj_y, self.val_traj_x, self.val_traj_y)
         # get sizes
