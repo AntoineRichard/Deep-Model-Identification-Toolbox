@@ -433,7 +433,7 @@ class H5Reader_Seq2Seq(H5Reader):
             if not (self.sts.continuity_idx is None):
                 # 1 sequence is continuous 0 otherwise.
                 vx = x[i:i+self.sts.sequence_length, self.sts.continuity_idx]
-                vy = y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, self.sts.continuity_idx]
+                vy = y[i+1:i+1+self.sts.sequence_length, self.sts.continuity_idx]
                 # Check sequence is fine, if not skip sequence.
                 if ((np.max(vx) > 1) or (np.max(vy) > 1)):
                     continue
@@ -470,13 +470,13 @@ class H5Reader_Seq2Seq(H5Reader):
             if not (self.sts.continuity_idx is None):
                 # 1 sequence is continuous 0 otherwise.
                 vx = x[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
-                vy = y[i+1:i+1+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                vy = y[i+1+self.sequence_length:i+1+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
                 # Check sequence is fine, if not skip sequence.
                 if ((np.max(vx) > 1) or (np.max(vy) > 1)):
                     continue
                 else:
                     nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length, value_x_idx])
-                    nY.append(y[i+1:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+1+self.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
             else:
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
                 nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
@@ -726,7 +726,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             if not (self.sts.continuity_idx is None):
                 # flag > 1 => manual control
                 vx = x[i:i+self.sts.sequence_length, self.sts.continuity_idx]
-                vy = y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, self.sts.continuity_idx]
+                vy = y[i+1:i+1+self.sts.sequence_length, self.sts.continuity_idx]
                 # Check sequence is fine, if not skip sequence.
                 # if one of the flag is superior to one, then skip the seq
                 if ((np.max(vx) > 1) or (np.max(vy) > 1)):
@@ -735,12 +735,12 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                 else:
                     seq_c.append(continuous)
                     nX.append(x[i:i+self.sts.sequence_length, value_x_idx])
-                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+1:i+1+self.sts.sequence_length, value_y_idx])
                     continuous = True
             else:
                 seq_c.append(continuous)
                 nX.append(x[i:i+self.sts.sequence_length])
-                nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
+                nY.append(y[i+1:i+1+self.sts.sequence_length])
                 continuous = True
         nx = np.array(nX)
         ny = np.array(nY)
@@ -839,6 +839,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         """
         # Load each dataset
         train_x, train_y, traj_x, traj_y, seq_c, traj_c = self.load(self.sts.train_dir)
+        print(train_y.shape)
         if (self.sts.test_dir is not None) and (self.sts.val_dir is not None):
             if self.sts.use_X_val:
                 raise('Cannot use cross-validation with separated directory for training validation and testing.')
@@ -854,6 +855,7 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         else:
             train_x, train_y, test_x, test_y, val_x, val_y, test_traj_x, test_traj_y, val_traj_x, val_traj_y  = self.ratio_based_split(train_x, train_y, traj_x, traj_y, seq_c, traj_c)
         
+        print(train_y.shape)
         # augment LSTMs data
         self.train_sc, self.train_x, self.train_y = self.augment_seq(train_x, train_y, self.train_sc, self.sts.sequence_length)
         #print(self.train_sc.shape)
@@ -864,6 +866,9 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
         # normalize all dataset based on the train-set
         self.normalize(self.train_x, self.train_y, self.test_x, self.test_y, self.val_x, self.val_y, self.test_traj_x, self.test_traj_y, self.val_traj_x, self.val_traj_y)
         # get sizes
+        print(train_y.shape)
+        print(test_traj_y.shape)
+        exit(0)
         self.train_size = self.train_x.shape[0]
         self.test_size = self.test_x.shape[0]
         self.val_size = self.val_x.shape[0]
