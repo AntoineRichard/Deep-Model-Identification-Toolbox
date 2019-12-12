@@ -215,9 +215,9 @@ class Settings:
         Check that cross validation parameters make sense
         """
         if self.use_X_val:
-            if self.folds < self.val_idx:
+            if self.folds-1 < self.val_idx:
                 raise ValueError("The validation index cannot be higher than the number of folds (indexing starts at 0 in python)")
-            if self.folds < self.test_idx:
+            if self.folds-1 < self.test_idx:
                 raise ValueError("The test index cannot be higher than the number of folds (indexing starts at 0 in python)")
 
     def check_idxs(self):
