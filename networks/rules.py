@@ -3,7 +3,7 @@ import train
 
 def select_train_object(sts):
     seq2seq = ['RNN','LSTM','GRU','ATTN']
-    attn = ['ATTN']
+    attn = ['ATTNSP','ATTNMP','ATTNMPMH','ATTNMPA','ATTMPAR']
     rnn = ['RNN','LSTM','GRU']
     seq2pts = ['MLP','CNN','MLPCPLX']
     name = sts.model.split('_')
