@@ -274,7 +274,166 @@ class Training_Uniform:
                     self.display(i, acc, worse, acc_t)
             self.dump_logs()
 
-class Training_Continuous_Seq2Seq(Training_Uniform):
+class Training_RNN_Seq2Seq(Training_Uniform):
+    """
+    Training container with support for continuous time seq2seq processing.
+    Used to train and evaluate the neural networks performances.
+    """
+    def __init__(self, Settings):
+        super(Training_RNN_Seq2Seq, self).__init__(Settings)
+    
+    def load_dataset(self):
+        """
+        Instantiate the dataset-reader object based on user inputs.
+        See the settings object for more information.
+        """
+        self.DS = readers.H5Reader_Seq2Seq(self.sts)
+
+    def load_sampler(self):
+        """
+        Instantiate the sampler object
+        """
+        self.SR = samplers.UniformSampler(self.DS, self.sts)
+    
+    def load_model(self):
+        """
+        Calls the network generator to load/generate the requested model.
+        Please note that the generation of models is still experimental 
+        and may change frequently. For more information have look at the
+        network_generator.
+        """
+        self.M = network_generator.get_graph(self.sts)
+        self.train_hs = self.M.get_hidden_state(self.sts.batch_size)
+        self.train_val_hs = self.M.get_hidden_state(self.sts.val_batch_size)
+        self.val_hs = self.M.get_hidden_state(self.sts.val_batch_size)
+        self.val_traj_hs = self.M.get_hidden_state(self.sts.val_traj_batch_size)
+
+    def train_step(self, i):
+        """
+        Training step: Samples a new batch, perform forward and backward pass.
+        Please note that the networks take a large amount of placeholders as 
+        input. They are not necessarily used they are here to maximize
+        compatibility between the differemt models, and priorization schemes.
+        Input:
+            i : the current step (int)
+        """
+        prct, batch_x, batch_y = self.SR.sample_train_batch()
+        _, self.train_hs = self.sess.run([self.M.train_step, self.M.current_state],
+                                          feed_dict = {self.M.x: batch_x,
+                                                       self.M.y: batch_y,
+                                                       self.M.hs: self.train_hs,
+                                                       self.M.weights: np.ones(self.sts.batch_size),
+                                                       self.M.keep_prob: self.sts.dropout,
+                                                       self.M.step: i,
+                                                       self.M.is_training: True})
+
+    def eval_on_train(self, i):
+        """
+        Evaluation Step: Samples a new batch and perform forward pass. The sampler here
+        is independant from the training one. Also logs information about training 
+        performance in a list.
+        Input:
+            i : the current step (int)
+        """
+        prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
+        # Computes accuracy and loss + acquires summaries
+        acc, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+                                                                 self.M.merged, self.M.current_state],
+                                                                 feed_dict = {self.M.x: batch_xs,
+                                                                              self.M.y: batch_ys,
+                                                                              self.M.hs: self.train_val_hs,
+                                                                              self.M.weights: np.ones(batch_xs.shape[0]),
+                                                                              self.M.keep_prob: self.sts.dropout,
+                                                                              self.M.step: i,
+                                                                              self.M.is_training: False})
+        # Update hard-logs
+        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
+        self.train_logs.append([i] + [elapsed_time] + list(acc))
+        # Write tensorboard logs
+        self.train_writer.add_summary(summaries, i)
+
+    def eval_on_validation_single_step(self, i):
+        """
+        Evaluation Step: Samples a new batch out of the validation set and performs
+        a forward pass. Also logs the performance about the evaluation set. Saves
+        the model if it performed better than ever before.
+        Input:
+            i : the current step (int)
+        """
+        prct, batch_xs , batch_ys = self.SR.sample_val_batch() 
+        # Computes accuracy and loss + acquires summaries
+        acc, loss, summaries, self.val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+                                                           self.M.merged, self.M.current_state],
+                                                          feed_dict = {self.M.x: batch_xs,
+                                                                       self.M.y: batch_ys,
+                                                                       self.M.hs: self.val_hs,
+                                                                       self.M.weights: np.ones(batch_xs.shape[0]),
+                                                                       self.M.keep_prob: self.sts.dropout,
+                                                                       self.M.step: i,
+                                                                       self.M.is_training: False})
+        # Update Single-Step hard-logs
+        elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
+        self.test_logs.append([i] + [elapsed_time]+list(acc))
+        # Update inner variables and saves best model weights
+        avg = np.mean(acc)
+        if  avg < self.best_1s:
+            self.best_1s = avg
+            NN_save_name = os.path.join(self.sts.model_ckpt,'Best_1S')
+            self.saver.save(self.sess, NN_save_name)
+        # Write tensorboard logs
+        self.test_writer.add_summary(summaries, i)
+        # Return accuracy for console display
+        return acc
+        
+    def get_predictions(self, full, hs, i):
+        """
+        Get the predictions of the network.
+        Input:
+            full: a batch of inputs in the form [Batch_size x Sequence_size x Input_size]
+        Output:
+            pred: the predictions associated with those batches in the
+                  form [Batch_size x Output_dim]
+        """
+        pred, hs = self.sess.run([self.M.y_, self.M.mid_state],
+                                 feed_dict = {self.M.x: full,
+                                              self.M.hs: hs,
+                                              self.M.keep_prob:self.sts.dropout,
+                                              self.M.weights: np.ones(full.shape[0]),
+                                              self.M.is_training: False,
+                                              self.M.step: i})
+        return pred, hs
+    
+    def eval_on_validation_multi_step(self, i): # TODO replace i by train_step
+        """
+        Evaluation Step on Trajectories: Samples a new batch of trajectories to
+        evaluate the network on. Performs a forward pass and logs the
+        performance of the model on multistep predictions. If the models performed
+        better than ever before then save model.
+        Input:
+            i : the current step (int)
+        """
+        predictions = []
+        # Sample trajectory batch out of the evaluation set
+        batch_x, batch_y = self.SR.sample_val_trajectory()
+        # Take only the first elements of the trajectory
+        full = batch_x[:,:self.sts.sequence_length,:]
+        hs = self.val_traj_hs
+        # Run iterative predictions
+        for k in range(self.sts.sequence_length, self.sts.sequence_length+self.sts.trajectory_length - 1):
+            pred, hs = self.get_predictions(full, hs, i)
+            pred = pred[:,-1,:]
+            predictions.append(np.expand_dims(pred, axis=1))
+            # Remove first elements of old batch add predictions
+            # concatenated with the next command input
+            cmd = batch_x[:, k+1, -self.sts.cmd_dim:]
+            new = np.concatenate((pred, cmd), axis=1)
+            new = np.expand_dims(new, axis=1)
+            old = full[:,1:,:]
+            full = np.concatenate((old,new), axis=1)
+        predictions = np.concatenate(predictions, axis = 1)
+        return self.eval_multistep(predictions, batch_y, i)
+
+class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
     """
     Training container with support for continuous time seq2seq processing.
     Used to train and evaluate the neural networks performances.
