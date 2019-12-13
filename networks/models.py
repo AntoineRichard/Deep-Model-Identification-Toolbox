@@ -189,11 +189,7 @@ class GraphATTNMPMH(GraphATTNSP):
             if layer_type == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
         self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
-        #with tf.name_scope('feed_forward'):
-        #    for i, di in enumerate(d):
-        #        self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-        #self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
-        self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
+        self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
             a = tf.range(settings.sequence_length,dtype=tf.float32)
@@ -205,94 +201,6 @@ class GraphATTNMPMH(GraphATTNSP):
             self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
             tf.summary.scalar('w_loss', self.w_loss)
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
-        # Train
-        self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
-        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
-        self.train_step = train_fn(self.w_loss, settings.learning_rate)
-        # Tensorboard
-        self.merged = tf.summary.merge_all()
-
-class GraphATTNMPA(GraphATTNSP):
-    def __init__(self, settings, model_depth, ff, d, act=tf.nn.relu):
-        # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,settings.input_dim], name='inputs')
-        self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
-        self.step = tf.placeholder(tf.int32, name='step')
-        self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
-        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
-        # Reshape
-        mask = self.make_causal_mask(settings.sequence_length)
-
-        # Embedding
-        self.embbed = tf.layers.dense(self.x, model_depth, use_bias=False, activation=None)
-        # Positional Embedding
-        self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
-        # Attention Projection
-        with tf.name_scope('qkv_projection'):
-            self.QW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='q_projection')
-            self.KW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='k_projection')
-            self.VW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='v_projection')
-        # Attention mechanism
-        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask)
-        # FeedForward
-        with tf.name_scope('feed_forward'):
-            for i, di in enumerate(d):
-                self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-        self.reg = tf.add(self.xr, self.pcoded)
-        self.ys_ = tf.layers.dense(self.reg, settings.output_dim, activation=None, name='output_full_dim')
-        self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
-        # Loss
-        with tf.name_scope('loss_ops'):
-            self.diff = tf.square(tf.subtract(self.ys_, self.y))
-            self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
-            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
-            tf.summary.scalar('w_loss', self.w_loss)
-            tf.summary.scalar('loss', self.s_loss)
-        # Train
-        self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
-        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
-        self.train_step = train_fn(self.w_loss, settings.learning_rate)
-        # Tensorboard
-        self.merged = tf.summary.merge_all()
-
-class GraphATTNMPAR(GraphATTNSP):
-    def __init__(self, settings, model_depth, ff, d, act=tf.nn.relu):
-        # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,settings.input_dim], name='inputs')
-        self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
-        self.step = tf.placeholder(tf.int32, name='step')
-        self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
-        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
-        # Reshape
-        mask = self.make_causal_mask(settings.sequence_length)
-
-        # Embedding
-        self.embbed = tf.layers.dense(self.x, model_depth, use_bias=False, activation=None)
-        # Positional Embedding
-        self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
-        # Attention Projection
-        with tf.name_scope('qkv_projection'):
-            self.QW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='q_projection')
-            self.KW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='k_projection')
-            self.VW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='v_projection')
-        # Attention mechanism
-        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask)
-        # FeedForward
-        with tf.name_scope('feed_forward'):
-            for i, di in enumerate(d):
-                self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-        self.reg = tf.add(self.xr, self.pcoded)
-        self.ys_ = tf.layers.dense(self.reg, settings.output_dim, activation=None, name='output_full_dim')
-        self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
-        # Loss
-        with tf.name_scope('loss_ops'):
-            self.diff = tf.square(tf.subtract(self.ys_, self.y))
-            self.s_loss = tf.reduce_mean(tf.reduce_mean(self.diff, axis = 1),axis = 1)
-            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
-            tf.summary.scalar('w_loss', self.w_loss)
-            tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
         self.acc_op = accuracy(self.y_, self.y[:,-1,:])

@@ -2,8 +2,8 @@ from settings import Settings
 import train
 
 def select_train_object(sts):
-    seq2seq = ['RNN','LSTM','GRU','ATTNMP', 'ATTNMPMH', 'ATTNMPA', 'ATTNMPAR']
-    attn = ['ATTNMP','ATTNMPMH','ATTNMPA','ATTMPAR']
+    seq2seq = ['RNN','LSTM','GRU','ATTNMP', 'ATTNMPMH']
+    attn = ['ATTNMP','ATTNMPMH']
     rnn = ['RNN','LSTM','GRU']
     seq2pts = ['MLP','CNN','MLPCPLX','ATTNSP']
     name = sts.model.split('_')

@@ -470,14 +470,6 @@ def get_graph(settings):
     elif name[0] == 'ATTNMP':
         return ATTNMPMH_Generator(name,settings)
 
-    elif name[0] == 'ATTNMPA':
-        activation = get_activation(name)
-        d_model = int(name[2])
-        ff = int(name[3])
-        d = name[4:]
-        d = [int(x) for x in d]
-        return models.GraphATTNMPA_dmodel_ff_dX(settings, d_model, ff, d, act=activation)
-
     elif name[0] == 'ATTNMPMH':
         return ATTNMPMH_Generator(name,settings)
     else:
