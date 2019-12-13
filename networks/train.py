@@ -179,7 +179,7 @@ class Training_Uniform:
 
         """
         # Compute error
-        error_x = [SK_MSE(predictions[:,:,k], batch_y[:,:-1,k]) for k in range(predictions.shape[-1])]
+        error_x = [np.sqrt(SK_MSE(predictions[:,:,k], batch_y[:,:-1,k])) for k in range(predictions.shape[-1])]
         worse = np.max(error_x)
         avg = np.mean(error_x)
         # Update multistep hard-logs
