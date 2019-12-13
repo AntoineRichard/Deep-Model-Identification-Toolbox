@@ -508,7 +508,8 @@ class GraphGRU:
     GRU.
     """
     def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
-
+        self.v_recurrent_layers = recurrent_layers
+        self.v_hidden_state = hidden_state
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
@@ -522,7 +523,7 @@ class GraphGRU:
         self.rnn_tuple_state = tuple([self.hs[idx] for idx in range(recurrent_layers)])
         stacked_rnn = []
         for _ in range(recurrent_layers):
-            stacked_rnn.append(tf.nn.rnn_cell.BasicRNNCell(hidden_state, activation=tf.nn.tanh, name='rnn_cell_'+str(_)))
+            stacked_rnn.append(tf.nn.rnn_cell.GRUCell(hidden_state, activation=tf.nn.tanh, name='gru_cell_'+str(_)))
         cell = tf.nn.rnn_cell.MultiRNNCell(stacked_rnn, state_is_tuple = True)
         # Reshape data
         self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim], name="input-reformated")
@@ -561,6 +562,9 @@ class GraphGRU:
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
+    
+    def get_hidden_state(self, batch_size):
+        return np.zeros((self.v_recurrent_layers, batch_size, self.v_hidden_state))
 
 
 
