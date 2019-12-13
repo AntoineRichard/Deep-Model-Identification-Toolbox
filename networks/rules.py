@@ -2,10 +2,10 @@ from settings import Settings
 import train
 
 def select_train_object(sts):
-    seq2seq = ['RNN','LSTM','GRU','ATTN']
-    attn = ['ATTNSP','ATTNMP','ATTNMPMH','ATTNMPA','ATTMPAR']
+    seq2seq = ['RNN','LSTM','GRU','ATTNMP', 'ATTNMPMH', 'ATTNMPA', 'ATTNMPAR']
+    attn = ['ATTNMP','ATTNMPMH','ATTNMPA','ATTMPAR']
     rnn = ['RNN','LSTM','GRU']
-    seq2pts = ['MLP','CNN','MLPCPLX']
+    seq2pts = ['MLP','CNN','MLPCPLX','ATTNSP']
     name = sts.model.split('_')
     if sts.reader_mode == 'classic':
         if name[0] in seq2seq:

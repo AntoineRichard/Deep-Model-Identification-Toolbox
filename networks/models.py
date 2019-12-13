@@ -14,8 +14,11 @@ def train_fn(loss, learning_rate):
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
     return train_step
 
-class GraphATTNSP_dmodel_ff_dX:
-    def __init__(self, settings, model_depth, ff, d, act=tf.nn.relu):
+class GraphATTNSP:
+    """
+    Attention Based Network
+    """
+    def __init__(self, settings, model_depth, layers, params, act=tf.nn.relu):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
@@ -27,7 +30,6 @@ class GraphATTNSP_dmodel_ff_dX:
         mask = self.make_causal_mask(settings.sequence_length)
         tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
-
         # Embedding
         self.embbed = tf.layers.dense(self.x, model_depth, use_bias=False, activation=None)
         # Positional Embedding
@@ -40,18 +42,21 @@ class GraphATTNSP_dmodel_ff_dX:
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask)
         # FeedForward
-        with tf.name_scope('feed_forward'):
-            for i, di in enumerate(d):
-                self.xr = tf.layers.dense(self.xr, di, activation=act, name='dense_'+str(i))
-        self.ys_ = tf.layers.dense(self.xr, settings.output_dim, activation=None, name='output_full_dim')
-        self.y_ = self.ys_[:,-1,:]#tf.layers.flatten(self.xr, name='output')
+        self.xc = self.xr
+        for i, layer_type in enumerate(layers):
+            if layer_type == 'dense':
+                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+            if layer_type == 'dropout':
+                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
+        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
+        self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
-            self.diff = tf.square(tf.subtract(self.y_, self.yr))#self.x[:,:,:3]))
+            self.diff = tf.square(tf.subtract(self.y_, self.yr))
             self.s_loss = tf.reduce_mean(self.diff, axis = 1)
             self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
             tf.summary.scalar('w_loss', self.w_loss)
-            tf.summary.scalar('loss', self.s_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
         self.acc_op = accuracy(self.y_, self.yr)
@@ -71,8 +76,6 @@ class GraphATTNSP_dmodel_ff_dX:
                 masked_scores = tf.multiply(mask, scores)
                 self.p_attn = tf.nn.softmax(masked_scores, axis = -1)
                 tf.summary.image('attn_weights', tf.expand_dims(self.p_attn,-1))
-            #if self.dropout is not None:
-            #   self.p_attn = dropout(self.p_attn)
             return tf.matmul(self.p_attn, value)
 
     def positional_encoding(self, x, model_depth, max_len=5000, name='positional_encoding'):
@@ -80,11 +83,11 @@ class GraphATTNSP_dmodel_ff_dX:
             encoding = np.zeros([max_len, model_depth], np.float32)
             position = np.arange(max_len, dtype=np.float32)[:, np.newaxis]
             div_term = np.exp(np.arange(0,model_depth,2, dtype=np.float32) * (-np.log(10000.0)/model_depth))
-            encoding[:, 0::2] = np.sin(position*div_term)#, name='sinus_encoding')
-            encoding[:, 1::2] = np.cos(position*div_term)#, name='cosinus_encoding')
+            encoding[:, 0::2] = np.sin(position*div_term)
+            encoding[:, 1::2] = np.cos(position*div_term)
             return tf.math.add(x, tf.cast(encoding, dtype=tf.float32), name = 'encoding')
 
-class GraphATTNMP(GraphATTNSP_dmodel_ff_dX):
+class GraphATTNMP(GraphATTNSP):
     """
     Seq2Seq Attention based network
     """
@@ -136,7 +139,7 @@ class GraphATTNMP(GraphATTNSP_dmodel_ff_dX):
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphATTNMPMH(GraphATTNSP_dmodel_ff_dX):
+class GraphATTNMPMH(GraphATTNSP):
     """
     Multi-Head Seq2Seq Attention based network
     """
@@ -209,7 +212,7 @@ class GraphATTNMPMH(GraphATTNSP_dmodel_ff_dX):
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphATTNMPA_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
+class GraphATTNMPA(GraphATTNSP):
     def __init__(self, settings, model_depth, ff, d, act=tf.nn.relu):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,settings.input_dim], name='inputs')
@@ -253,7 +256,7 @@ class GraphATTNMPA_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
-class GraphATTNMPAR_dmodel_ff_dX(GraphATTNSP_dmodel_ff_dX):
+class GraphATTNMPAR(GraphATTNSP):
     def __init__(self, settings, model_depth, ff, d, act=tf.nn.relu):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,settings.input_dim], name='inputs')
