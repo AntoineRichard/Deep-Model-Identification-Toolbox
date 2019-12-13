@@ -294,6 +294,50 @@ def LSTM_Generator(name,settings):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphLSTM(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation)
 
+def ATTNSP_Generator(name,settings):
+    """
+    Parses a string to extract the model parameters. In this case,
+    a Seq2Seq Multi-Head Attention based network.
+    
+    Available layers are the following:
+      model depth: 'md' followed by a number: md64 means that the 
+                        embedding .
+      Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+      Dropout layers: 'r', the keeprate is defined when starting
+                      the training.
+    
+    Syntexically, the string must start with the type of model, then
+    the type of activation function must follow, then follows as much
+    layers as desired. Each 'word' must be separated using underscores.
+  
+    A standard RNN would be defined as follows:
+    ATTNSP_ (the type of network)
+    ATTNSP_RELU_ (the activation function)
+    ATTNSP_RELU_md64_ (the depth of the model)
+    ATTNSP_RELU_md64_32_r_32 (an example of a ATTSP model)
+    
+    All the combinations should work.
+    """
+    activation = get_activation(name)
+    model_depth = None
+    layer_type = []
+    layer_param = []
+    d = name[2:]
+    for di in d:
+        if di[:2] == 'md':
+             model_depth = int(di[2:])
+        elif di[0] == 'd':
+            layer_type.append('dense')
+            layer_param.append(int(di[1:]))
+        elif di[0] == 'r':
+            layer_type.append('dropout')
+            layer_param.append(0)
+        else:
+            raise ValueError('Error parsing model name: unknown word')
+    return models.GraphATTNSP(settings, model_depth, layer_type, layer_param, act=activation)
+
 def ATTNMPMH_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
@@ -371,7 +415,7 @@ def ATTNMP_Generator(name,settings):
     ATTNMP_RELU_ (the activation function)
     ATTNMP_RELU_a2_ (the loss weighting coefficient)
     ATTNMP_RELU_a2_md64_ (the depth of the model)
-    ATTNMP_RELU_a2_md64_32_r_32 (an example of a ATTNMPMH model)
+    ATTNMP_RELU_a2_md64_32_r_32 (an example of a ATTNMP model)
     
     All the combinations should work.
     """
@@ -421,12 +465,8 @@ def get_graph(settings):
         return GRU_Generator(name,settings)
 
     elif name[0] == 'ATTNSP':
-        activation = get_activation(name)
-        d_model = int(name[2])
-        ff = int(name[3])
-        d = name[4:]
-        d = [int(x) for x in d]
-        return models.GraphATTNSP_dmodel_ff_dX(settings, d_model, ff, d, act=activation)
+        return ATTNSP_Generator(name, settings)
+
     elif name[0] == 'ATTNMP':
         return ATTNMPMH_Generator(name,settings)
 
@@ -437,6 +477,7 @@ def get_graph(settings):
         d = name[4:]
         d = [int(x) for x in d]
         return models.GraphATTNMPA_dmodel_ff_dX(settings, d_model, ff, d, act=activation)
+
     elif name[0] == 'ATTNMPMH':
         return ATTNMPMH_Generator(name,settings)
     else:
