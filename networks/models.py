@@ -445,7 +445,8 @@ class GraphRNN:
     RNN.
     """
     def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
-
+        self.v_recurrent_layers = recurrent_layers
+        self.v_hidden_state = hidden_state
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
@@ -499,6 +500,67 @@ class GraphRNN:
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
+    def get_hidden_state(self, batch_size):
+        return np.zeros((self.v_recurrent_layers, batch_size, self.v_hidden_state))
+
+class GraphGRU:
+    """
+    GRU.
+    """
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
+        self.hs = tf.placeholder(tf.float32, [recurrent_layers, None, hidden_state], name = 'hidden_state')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+       
+        # Hidden-State definition 
+        self.rnn_tuple_state = tuple([self.hs[idx] for idx in range(recurrent_layers)])
+        stacked_rnn = []
+        for _ in range(recurrent_layers):
+            stacked_rnn.append(tf.nn.rnn_cell.BasicRNNCell(hidden_state, activation=tf.nn.tanh, name='rnn_cell_'+str(_)))
+        cell = tf.nn.rnn_cell.MultiRNNCell(stacked_rnn, state_is_tuple = True)
+        # Reshape data
+        self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim], name="input-reformated")
+        self.yr = tf.reshape(self.y, [-1, settings.sequence_length*settings.output_dim], name="target-reformated")
+        self.inputs_series = tf.split(self.xr, settings.sequence_length, axis=1)
+        self.labels_series = tf.split(self.yr, settings.sequence_length, axis=1)
+        # Send data in two passes
+        self.input_one = [self.inputs_series[0]]
+        self.input_two = self.inputs_series[1:]
+        # Operations
+        # Roll RNN in 2 steps
+        # First to get the the hidden state after only one iteration (needed for multistep)
+        self.first_series, self.mid_state = tf.nn.static_rnn(cell, self.input_one, initial_state=self.rnn_tuple_state)
+        # Then roll the rest
+        self.second_series, self.current_state = tf.nn.static_rnn(cell, self.input_two, initial_state=self.mid_state)
+        self.states_series = self.first_series + self.second_series
+        # FeedForward layers
+        self.tensor_state = tf.transpose(tf.convert_to_tensor(self.states_series),[1,0,2])
+        self.xc = self.tensor_state
+        for i, layer in enumerate(layer_type):
+            if layer == 'dense':
+                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+            if layer == 'dropout':
+                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+        # Losses
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.y_, self.y))
+            self.s_loss =  tf.reduce_mean(tf.reduce_mean(self.diff, axis=1),axis=1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
+        # Train
+        self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
 
 
 

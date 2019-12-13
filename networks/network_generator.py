@@ -163,7 +163,7 @@ def RNN_Generator(name,settings):
     RNN_RELU_ (the activation function)
     RNN_RELU_hs64_ (the hidden state)
     RNN_RELU_hs64_l2_ (the number of recurrent layers)
-    RNN_RELU_hg64_l2_d64_r_d32 (an example of a RNN model)
+    RNN_RELU_hs64_l2_d64_r_d32 (an example of a RNN model)
     
     All the combinations should work.
     """
@@ -186,7 +186,7 @@ def RNN_Generator(name,settings):
             layer_param.append(0)
         else:
             raise ValueError('Error parsing model name: unknown word')
-    return models.GraphRNN(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation), hidden_state
+    return models.GraphRNN(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation)
 
 def GRU_Generator(name,settings):
     """
@@ -216,7 +216,7 @@ def GRU_Generator(name,settings):
     GRU_RELU_ (the activation function)
     GRU_RELU_hs64_ (the hidden state)
     GRU_RELU_hs64_l2_ (the number of recurrent layers)
-    GRU_RELU_hg64_l2_d64_r_d32 (an example of a GRU model)
+    GRU_RELU_hs64_l2_d64_r_d32 (an example of a GRU model)
     
     All the combinations should work.
     """
@@ -269,7 +269,7 @@ def LSTM_Generator(name,settings):
     LSTM_RELU_ (the activation function)
     LSTM_RELU_hs64_ (the hidden state)
     LSTM_RELU_hs64_l2_ (the number of recurrent layers)
-    LSTM_RELU_hg64_l2_d64_r_d32 (an example of a LSTM model)
+    LSTM_RELU_hs64_l2_d64_r_d32 (an example of a LSTM model)
     
     All the combinations should work.
     """

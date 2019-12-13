@@ -801,7 +801,6 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                 rx = np.reshape(xy[0],[xy[0].shape[0]*xy[0].shape[1],xy[0].shape[2]])
                 ry = np.reshape(xy[1],[xy[1].shape[0]*xy[1].shape[1],xy[1].shape[2]])
                 # roll the sequence and remove the end (rolled over points)
-                print(rx.shape)
                 rx = np.roll(rx,-i,axis=0)[i:-size+i]
                 ry = np.roll(ry,-i,axis=0)[i:-size+i]
                 rx = np.reshape(rx,[-1,size,self.sts.input_dim])

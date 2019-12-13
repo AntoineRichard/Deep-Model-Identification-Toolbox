@@ -302,11 +302,11 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
         and may change frequently. For more information have look at the
         network_generator.
         """
-        self.M, self.hidden_state = network_generator.get_graph(self.sts)
-        self.train_hs = np.zeros((2,self.sts.batch_size, self.hidden_state))
-        self.train_val_hs = np.zeros((2,self.sts.val_batch_size, self.hidden_state))
-        self.val_hs = np.zeros((2,self.sts.val_batch_size, self.hidden_state))
-        self.val_traj_hs = np.zeros((2,self.sts.val_traj_batch_size, self.hidden_state))
+        self.M = network_generator.get_graph(self.sts)
+        self.train_hs = self.M.get_hidden_state(self.sts.batch_size)
+        self.train_val_hs = self.M.get_hidden_state(self.sts.val_batch_size)
+        self.val_hs = self.M.get_hidden_state(self.sts.val_batch_size)
+        self.val_traj_hs = self.M.get_hidden_state(self.sts.val_traj_batch_size)
 
     def train_step(self, i):
         """
@@ -318,7 +318,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
             i : the current step (int)
         """
         prct, batch_x, batch_y, continuity = self.SR.sample_train_batch()
-        self.train_hs = np.swapaxes(np.swapaxes(self.train_hs,1,2)*continuity,1,2)
+        self.train_hs = np.swapaxes(np.swapaxes(self.train_hs,-2,-1)*continuity,-2,-1)
         _, self.train_hs = self.sess.run([self.M.train_step, self.M.current_state],
                                           feed_dict = {self.M.x: batch_x,
                                                        self.M.y: batch_y,
@@ -337,7 +337,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
             i : the current step (int)
         """
         prct, batch_xs, batch_ys, continuity = self.SR.sample_eval_train_batch()
-        self.train_val_hs = np.swapaxes(np.swapaxes(self.train_val_hs,1,2)*continuity,1,2)
+        self.train_val_hs = np.swapaxes(np.swapaxes(self.train_val_hs,-2,-1)*continuity,-2,-1)
         # Computes accuracy and loss + acquires summaries
         acc, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
                                                                  self.M.merged, self.M.current_state],
@@ -363,7 +363,7 @@ class Training_Continuous_Seq2Seq(Training_Uniform):
             i : the current step (int)
         """
         prct, batch_xs , batch_ys, continuity = self.SR.sample_val_batch() 
-        self.val_hs = np.swapaxes(np.swapaxes(self.val_hs,1,2)*continuity,1,2)
+        self.val_hs = np.swapaxes(np.swapaxes(self.val_hs,-2,-1)*continuity,-2,-1)
         # Computes accuracy and loss + acquires summaries
         acc, loss, summaries, self.val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
                                                            self.M.merged, self.M.current_state],
