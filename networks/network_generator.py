@@ -294,6 +294,108 @@ def LSTM_Generator(name,settings):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphLSTM(settings, hidden_state, recurrent_layers, layer_type, layer_param, act=activation)
 
+def ATTNMPMH_Generator(name,settings):
+    """
+    Parses a string to extract the model parameters. In this case,
+    a Seq2Seq Multi-Head Attention based network.
+    
+    Available layers are the following:
+      alpha : 'a' followed by a number: a2 means that the loss value
+      of each sequence element will be weighted by its position in the
+      sequence to the power 2.
+      model depth: 'md' followed by a number: md64 means that the 
+                        embedding .
+      Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+      Dropout layers: 'r', the keeprate is defined when starting
+                      the training.
+    
+    Syntexically, the string must start with the type of model, then
+    the type of activation function must follow, then follows as much
+    layers as desired. Each 'word' must be separated using underscores.
+  
+    A standard RNN would be defined as follows:
+    ATTNMPMH_ (the type of network)
+    ATTNMPMH_RELU_ (the activation function)
+    ATTNMPMH_RELU_a2_ (the loss weighting coefficient)
+    ATTNMPMH_RELU_a2_md64_ (the depth of the model)
+    ATTNMPMH_RELU_a2_md64_32_r_32 (an example of a ATTNMPMH model)
+    
+    All the combinations should work.
+    """
+    activation = get_activation(name)
+    model_depth = None
+    alpha = None
+    layer_type = []
+    layer_param = []
+    d = name[2:]
+    for di in d:
+        if di[:2] == 'md':
+             model_depth = int(di[2:])
+        elif di[0] == 'a':
+            alpha = float(di[1:])
+        elif di[0] == 'd':
+            layer_type.append('dense')
+            layer_param.append(int(di[1:]))
+        elif di[0] == 'r':
+            layer_type.append('dropout')
+            layer_param.append(0)
+        else:
+            raise ValueError('Error parsing model name: unknown word')
+    return models.GraphATTNMPMH(settings, alpha, model_depth, layer_type, layer_param, act=activation)
+
+def ATTNMP_Generator(name,settings):
+    """
+    Parses a string to extract the model parameters. In this case,
+    a Seq2Seq Attention based network.
+    
+    Available layers are the following:
+      alpha : 'a' followed by a number: a2 means that the loss value
+      of each sequence element will be weighted by its position in the
+      sequence to the power 2.
+      model depth: 'md' followed by a number: md64 means that the 
+                        embedding .
+      Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+      Dropout layers: 'r', the keeprate is defined when starting
+                      the training.
+    
+    Syntexically, the string must start with the type of model, then
+    the type of activation function must follow, then follows as much
+    layers as desired. Each 'word' must be separated using underscores.
+  
+    A standard RNN would be defined as follows:
+    ATTNMP_ (the type of network)
+    ATTNMP_RELU_ (the activation function)
+    ATTNMP_RELU_a2_ (the loss weighting coefficient)
+    ATTNMP_RELU_a2_md64_ (the depth of the model)
+    ATTNMP_RELU_a2_md64_32_r_32 (an example of a ATTNMPMH model)
+    
+    All the combinations should work.
+    """
+    activation = get_activation(name)
+    model_depth = None
+    alpha = None
+    layer_type = []
+    layer_param = []
+    d = name[2:]
+    for di in d:
+        if di[:2] == 'md':
+             model_depth = int(di[2:])
+        elif di[0] == 'a':
+            alpha = float(di[1:])
+        elif di[0] == 'd':
+            layer_type.append('dense')
+            layer_param.append(int(di[1:]))
+        elif di[0] == 'r':
+            layer_type.append('dropout')
+            layer_param.append(0)
+        else:
+            raise ValueError('Error parsing model name: unknown word')
+    return models.GraphATTNMP(settings, alpha, model_depth, layer_type, layer_param, act=activation)
+
 def get_graph(settings):
     """
     Generatates advanced models based on a simple string. Each
@@ -326,14 +428,8 @@ def get_graph(settings):
         d = [int(x) for x in d]
         return models.GraphATTNSP_dmodel_ff_dX(settings, d_model, ff, d, act=activation)
     elif name[0] == 'ATTNMP':
-        activation = get_activation(name)
-        d_model = int(name[3])
-        ff = int(name[4])
-        alpha = float(name[2])
-        print(alpha)
-        d = name[5:]
-        d = [int(x) for x in d]
-        return models.GraphATTNMP_dmodel_ff_dX(settings, d_model, ff, alpha, d, act=activation)
+        return ATTNMPMH_Generator(name,settings)
+
     elif name[0] == 'ATTNMPA':
         activation = get_activation(name)
         d_model = int(name[2])
@@ -342,14 +438,6 @@ def get_graph(settings):
         d = [int(x) for x in d]
         return models.GraphATTNMPA_dmodel_ff_dX(settings, d_model, ff, d, act=activation)
     elif name[0] == 'ATTNMPMH':
-        activation = get_activation(name)
-        d_model = int(name[3])
-        ff = int(name[4])
-        alpha = float(name[2])
-        print(alpha)
-        d = name[5:]
-        d = [int(x) for x in d]
-        return models.GraphATTNMPMH_dmodel_ff_dX(settings, d_model, ff, alpha, d, act=activation)
-
+        return ATTNMPMH_Generator(name,settings)
     else:
         raise Exception('error unknown model type')
