@@ -69,6 +69,8 @@ class Training_Uniform:
         self.best_ms = np.inf
         self.lw_ms = np.inf
         self.start_time = datetime.datetime.now()
+        self.forward_time = []
+        self.backward_time = []
 
     def saver_init_and_restore(self):
         """
@@ -93,12 +95,14 @@ class Training_Uniform:
             i : the current step (int)
         """
         prct, batch_xs, batch_ys = self.SR.sample_train_batch()
+        ts = datetime.datetime.now()
         _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_xs,
                                                           self.M.y: batch_ys,
                                                           self.M.weights: np.ones(self.sts.batch_size),
                                                           self.M.keep_prob: self.sts.dropout,
                                                           self.M.step: i,
                                                           self.M.is_training: True})
+        self.backward_time.append(datetime.datetime.now() - ts)
 
     def eval_on_train(self, i):
         """
@@ -110,6 +114,7 @@ class Training_Uniform:
         """
         prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
         # Computes accuracy and loss + acquires summaries
+        ts = datetime.datetime.now()
         acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
@@ -117,6 +122,7 @@ class Training_Uniform:
                                                      self.M.keep_prob: self.sts.dropout,
                                                      self.M.step: i,
                                                      self.M.is_training: False})
+        self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         self.train_logs.append([i] + [elapsed_time] + list(acc))
@@ -238,24 +244,44 @@ class Training_Uniform:
                        's worse acc: ', str(worse), ', ',
                        str(self.sts.trajectory_length), 's avg acc: ', str(ms_acc))
 
+    def get_model_parameters(self):
+        total_parameters = 0
+        for variable in tf.trainable_variables():
+            shape = variable.get_shape()
+            variable_parameters = 1
+            for dim in shape:
+                variable_parameters *= dim.value
+            total_parameters += variable_parameters
+        return total_parameters
+
     def dump_logs(self):
         """
         Saves the logs of the training in npy format
         """
         # Save model weights at the end of training
-        NN_save_name = os.path.join(self.sts.output_dir,'final_NN')
+        NN_save_name = os.path.join(self.sts.model_ckpt,'final_NN')
         self.saver.save(self.sess, NN_save_name)
         # Display training statistics
         print('#### TRAINING DONE ! ####')
         print('Best single-step-Accuracy reach for: ' + str(self.best_1s))
         print('Best multi-steps-Accuracy reach for: ' + str(self.best_ms))
         print('Least Worse Accuracy reach for: ' + str(self.lw_ms))
+
         # Write hard-logs as numpy arrays
         np.save(self.sts.output_dir + "/train_loss_log.npy", np.array(self.train_logs))
         np.save(self.sts.output_dir + "/test_single_step_loss_log.npy", np.array(self.test_logs))
         np.save(self.sts.output_dir + "/test_multi_step_loss_log.npy", np.array(self.test_logs_multi_step))
         np.save(self.sts.output_dir + "/means.npy", self.DS.mean)
         np.save(self.sts.output_dir + "/std.npy", self.DS.std)
+        
+        # Write networks statistics
+        with open(os.path.join(self.sts.output_dir,'statistics.txt'), 'a') as stats:
+            stats.write('network parameters: ' + str(self.get_model_parameters()) + os.linesep)
+            stats.write('network forward time: ' + str(np.mean(self.forward_time)) + ' batch_size (' + str(self.sts.val_batch_size) + ')' + os.linesep)
+            stats.write('network backward time: ' + str(np.mean(self.backward_time)) + ' batch_size (' + str(self.sts.batch_size) + ')' + os.linesep)
+            stats.write('best single-step-Accuracy reach for: ' + str(self.best_1s) + os.linesep)
+            stats.write('best multi-steps-Accuracy reach for: ' + str(self.best_ms) + os.linesep)
+            stats.write('least Worse Accuracy reach for: ' + str(self.lw_ms) + os.linesep)
 
     def train(self):
         """
@@ -265,12 +291,12 @@ class Training_Uniform:
             self.saver_init_and_restore()
             for i in range(self.sts.max_iterations):
                 self.train_step(i)
-                if i%10 == 0: #TODO Custom eval
+                if i%10 == 0:
                     self.eval_on_train(i)
                 if i%self.sts.log_frequency == 0: 
                     acc = self.eval_on_validation_single_step(i)
                     acc_t, worse = self.eval_on_validation_multi_step(i)
-                if i%250 == 0: #TODO Custom display
+                if i%250 == 0:
                     self.display(i, acc, worse, acc_t)
             self.dump_logs()
 
@@ -317,6 +343,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         Input:
             i : the current step (int)
         """
+        ts = datetime.datetime.now()
         prct, batch_x, batch_y = self.SR.sample_train_batch()
         _, self.train_hs = self.sess.run([self.M.train_step, self.M.current_state],
                                           feed_dict = {self.M.x: batch_x,
@@ -326,6 +353,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
                                                        self.M.keep_prob: self.sts.dropout,
                                                        self.M.step: i,
                                                        self.M.is_training: True})
+        self.backward_time.append(datetime.datetime.now() - ts)
 
     def eval_on_train(self, i):
         """
@@ -337,6 +365,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         """
         prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
         # Computes accuracy and loss + acquires summaries
+        ts = datetime.datetime.now()
         acc, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
                                                                  self.M.merged, self.M.current_state],
                                                                  feed_dict = {self.M.x: batch_xs,
@@ -346,6 +375,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
                                                                               self.M.keep_prob: self.sts.dropout,
                                                                               self.M.step: i,
                                                                               self.M.is_training: False})
+        self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         self.train_logs.append([i] + [elapsed_time] + list(acc))
@@ -477,6 +507,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
             i : the current step (int)
         """
         prct, batch_x, batch_y, continuity = self.SR.sample_train_batch()
+        ts = datetime.datetime.now()
         self.train_hs = np.swapaxes(np.swapaxes(self.train_hs,-2,-1)*continuity,-2,-1)
         _, self.train_hs = self.sess.run([self.M.train_step, self.M.current_state],
                                           feed_dict = {self.M.x: batch_x,
@@ -486,6 +517,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
                                                        self.M.keep_prob: self.sts.dropout,
                                                        self.M.step: i,
                                                        self.M.is_training: True})
+        self.backward_time.append(datetime.datetime.now() - ts)
 
     def eval_on_train(self, i):
         """
@@ -498,6 +530,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
         prct, batch_xs, batch_ys, continuity = self.SR.sample_eval_train_batch()
         self.train_val_hs = np.swapaxes(np.swapaxes(self.train_val_hs,-2,-1)*continuity,-2,-1)
         # Computes accuracy and loss + acquires summaries
+        ts = datetime.datetime.now()
         acc, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
                                                                  self.M.merged, self.M.current_state],
                                                                  feed_dict = {self.M.x: batch_xs,
@@ -507,6 +540,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
                                                                               self.M.keep_prob: self.sts.dropout,
                                                                               self.M.step: i,
                                                                               self.M.is_training: False})
+        self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
         self.train_logs.append([i] + [elapsed_time] + list(acc))
@@ -651,6 +685,7 @@ class Training_PER(Training_Uniform):
             i : the current step (int)
         """
         # Update weights
+        ts = datetime.datetime.now()
         if ((i%self.sts.per_refresh_rate == 0) and (i!=0)):
             self.SR.reset_for_update()
             loss = []
@@ -676,6 +711,8 @@ class Training_PER(Training_Uniform):
                                                           self.M.keep_prob: self.sts.dropout,
                                                           self.M.step: i,
                                                           self.M.is_training: True})
+        self.backward_time.append(datetime.datetime.now() - ts)
+
 class Training_GRAD(Training_Uniform):
     """
     Training container with a Gradient Upperbound priorization scheme. Used to
@@ -705,6 +742,7 @@ class Training_GRAD(Training_Uniform):
         Input:
             i : the current step (int)
         """
+        ts = datetime.datetime.now()
         prct, superbatch_x, superbatch_y = self.SR.sample_superbatch()
         G = self.sess.run(self.M.grad, feed_dict = {self.M.x: superbatch_x,
                                                     self.M.y: superbatch_y,
@@ -719,3 +757,4 @@ class Training_GRAD(Training_Uniform):
                                                           self.M.keep_prob: self.sts.dropout,
                                                           self.M.step: i,
                                                           self.M.is_training: True})
+        self.backward_time.append(datetime.datetime.now() - ts)
