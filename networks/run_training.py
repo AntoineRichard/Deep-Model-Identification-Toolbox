@@ -1,5 +1,5 @@
+import os
 from settings import Settings
-import train
 
 def select_train_object(sts):
     seq2seq = ['RNN','LSTM','GRU','ATTNMP', 'ATTNMPMH']
@@ -75,11 +75,12 @@ def select_train_object(sts):
         raise Exception('Unknown reader mode. Currently supported modes are: classic, seq2seq, continuous_seq2seq')
 
 def check_if_completed(sts):
-    raise Exception('Not implemented')
-
+    if os.path.exists(os.path.join(sts.output_dir,'statistics.txt')):
+        exit(0)
     
 if __name__ == "__main__":
     settings = Settings()
-    #check_if_completed(settings)
+    check_if_completed(settings)
+    import train
     select_train_object(settings)
 
