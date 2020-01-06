@@ -125,7 +125,7 @@ class Training_Uniform:
         self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.train_logs.append([i] + [elapsed_time] + list(acc))
+        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc))
         # Write tensorboard logs
         self.train_writer.add_summary(summaries, i)
 
@@ -148,7 +148,7 @@ class Training_Uniform:
                                                      self.M.is_training: False})
         # Update Single-Step hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs.append([i] + [elapsed_time]+list(acc))
+        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc))
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
         if  avg < self.best_1s:
@@ -190,7 +190,7 @@ class Training_Uniform:
         avg = np.mean(error_x)
         # Update multistep hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs_multi_step.append([i] + [elapsed_time] + list(error_x) + [worse])
+        self.test_logs_multi_step.append([i] + [datetime.datetime.now()] + list(error_x) + [worse])
         # Update inner variable
         if avg < self.best_ms:
             self.best_ms = avg
@@ -378,7 +378,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.train_logs.append([i] + [elapsed_time] + list(acc))
+        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc))
         # Write tensorboard logs
         self.train_writer.add_summary(summaries, i)
 
@@ -403,7 +403,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
                                                                        self.M.is_training: False})
         # Update Single-Step hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs.append([i] + [elapsed_time]+list(acc))
+        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc))
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
         if  avg < self.best_1s:
@@ -543,7 +543,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
         self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.train_logs.append([i] + [elapsed_time] + list(acc))
+        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc))
         # Write tensorboard logs
         self.train_writer.add_summary(summaries, i)
 
@@ -569,7 +569,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
                                                                        self.M.is_training: False})
         # Update Single-Step hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs.append([i] + [elapsed_time]+list(acc))
+        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc))
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
         if  avg < self.best_1s:
