@@ -4,8 +4,6 @@ import os
 import datetime
 import tensorflow as tf
 import numpy as np
-from sklearn.metrics import mean_squared_error as SK_MSE
-#custom import
 import samplers
 import readers
 import models
@@ -115,7 +113,7 @@ class Training_Uniform:
         prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
         # Computes accuracy and loss + acquires summaries
         ts = datetime.datetime.now()
-        acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
+        acc, std, loss, summaries = self.sess.run([self.M.acc_op, self.M.std_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
                                                      self.M.weights: np.ones(batch_xs.shape[0]),
@@ -125,7 +123,7 @@ class Training_Uniform:
         self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc))
+        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc) + list(std))
         # Write tensorboard logs
         self.train_writer.add_summary(summaries, i)
 
@@ -139,7 +137,7 @@ class Training_Uniform:
         """
         prct, batch_xs , batch_ys = self.SR.sample_val_batch() 
         # Computes accuracy and loss + acquires summaries
-        acc, loss, summaries = self.sess.run([self.M.acc_op, self.M.s_loss, self.M.merged],
+        acc, std, loss, summaries = self.sess.run([self.M.acc_op, self.M.std_op, self.M.s_loss, self.M.merged],
                                         feed_dict = {self.M.x: batch_xs,
                                                      self.M.y: batch_ys,
                                                      self.M.weights: np.ones(batch_xs.shape[0]),
@@ -148,7 +146,7 @@ class Training_Uniform:
                                                      self.M.is_training: False})
         # Update Single-Step hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc))
+        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc)+list(std))
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
         if  avg < self.best_1s:
@@ -185,7 +183,9 @@ class Training_Uniform:
 
         """
         # Compute error
-        error_x = [np.sqrt(SK_MSE(predictions[:,:,k], batch_y[:,:-1,k])) for k in range(predictions.shape[-1])]
+        error_x = (predictions[:,:,:] - batch_y[:,:-1,:])**2
+        std_x = np.std(error_x, axis=(0,1))
+        error_x = np.sqrt(np.mean(error_x, axis=(0,1)))
         worse = np.max(error_x)
         avg = np.mean(error_x)
         # Update multistep hard-logs
@@ -366,7 +366,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         prct, batch_xs, batch_ys = self.SR.sample_eval_train_batch()
         # Computes accuracy and loss + acquires summaries
         ts = datetime.datetime.now()
-        acc, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+        acc, std, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.std_op, self.M.s_loss,
                                                                  self.M.merged, self.M.current_state],
                                                                  feed_dict = {self.M.x: batch_xs,
                                                                               self.M.y: batch_ys,
@@ -378,7 +378,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc))
+        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc) + list(std))
         # Write tensorboard logs
         self.train_writer.add_summary(summaries, i)
 
@@ -392,7 +392,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         """
         prct, batch_xs , batch_ys = self.SR.sample_val_batch() 
         # Computes accuracy and loss + acquires summaries
-        acc, loss, summaries, self.val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+        acc, std, loss, summaries, self.val_hs = self.sess.run([self.M.acc_op, self.M.std_op, self.M.s_loss,
                                                            self.M.merged, self.M.current_state],
                                                           feed_dict = {self.M.x: batch_xs,
                                                                        self.M.y: batch_ys,
@@ -403,7 +403,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
                                                                        self.M.is_training: False})
         # Update Single-Step hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc))
+        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc)+list(std))
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
         if  avg < self.best_1s:
@@ -531,7 +531,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
         self.train_val_hs = np.swapaxes(np.swapaxes(self.train_val_hs,-2,-1)*continuity,-2,-1)
         # Computes accuracy and loss + acquires summaries
         ts = datetime.datetime.now()
-        acc, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+        acc, std, loss, summaries, self.train_val_hs = self.sess.run([self.M.acc_op, self.M.std_op, self.M.s_loss,
                                                                  self.M.merged, self.M.current_state],
                                                                  feed_dict = {self.M.x: batch_xs,
                                                                               self.M.y: batch_ys,
@@ -543,7 +543,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
         self.forward_time.append(datetime.datetime.now() - ts)
         # Update hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc))
+        self.train_logs.append([i] + [datetime.datetime.now()] + list(acc) + list(std))
         # Write tensorboard logs
         self.train_writer.add_summary(summaries, i)
 
@@ -558,7 +558,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
         prct, batch_xs , batch_ys, continuity = self.SR.sample_val_batch() 
         self.val_hs = np.swapaxes(np.swapaxes(self.val_hs,-2,-1)*continuity,-2,-1)
         # Computes accuracy and loss + acquires summaries
-        acc, loss, summaries, self.val_hs = self.sess.run([self.M.acc_op, self.M.s_loss,
+        acc, std, loss, summaries, self.val_hs = self.sess.run([self.M.acc_op, self.M.std_op, self.M.s_loss,
                                                            self.M.merged, self.M.current_state],
                                                           feed_dict = {self.M.x: batch_xs,
                                                                        self.M.y: batch_ys,
@@ -569,7 +569,7 @@ class Training_RNN_Continuous_Seq2Seq(Training_Uniform):
                                                                        self.M.is_training: False})
         # Update Single-Step hard-logs
         elapsed_time = (datetime.datetime.now() - self.start_time).total_seconds()
-        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc))
+        self.test_logs.append([i] + [datetime.datetime.now()]+list(acc)+list(std))
         # Update inner variables and saves best model weights
         avg = np.mean(acc)
         if  avg < self.best_1s:
