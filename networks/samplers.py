@@ -184,7 +184,7 @@ class PERSampler(UniformSampler):
         Err = np.sqrt(loss) + self.sts.epsilon
         V = np.power(Err, self.sts.alpha)
         self.P = V/np.sum(V)
-        self.sample_weigths = np.power(len(self.P)*self.P,-self.sts.beta)
+        self.sample_weights = np.power(len(self.P)*self.P,-self.sts.beta)
 
     def sample_for_update(self):
         """
