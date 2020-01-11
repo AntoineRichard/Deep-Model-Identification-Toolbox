@@ -364,7 +364,7 @@ def ATTNMPMH_Generator(name,settings):
     ATTNMPMH_RELU_ (the activation function)
     ATTNMPMH_RELU_a2_ (the loss weighting coefficient)
     ATTNMPMH_RELU_a2_md64_ (the depth of the model)
-    ATTNMPMH_RELU_a2_md64_32_r_32 (an example of a ATTNMPMH model)
+    ATTNMPMH_RELU_a2_md64_d32_r_d32 (an example of a ATTNMPMH model)
     
     All the combinations should work.
     """
