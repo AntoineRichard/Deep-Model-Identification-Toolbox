@@ -68,12 +68,14 @@ class GraphATTNSP:
 
     def make_causal_mask(self, size):
         with tf.name_scope('causal_mask'):
-            return tf.cast(np.tril(np.ones((1,size,size)),k=0)+np.triu(np.ones((1,size,size)),k=1)*1e-9,dtype=tf.float32)
+            #return 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
+            return tf.cast(np.tril(np.ones((1,size,size)),k=0),dtype=tf.float32)#+np.triu(np.ones((1,size,size)),k=1)*1e-9,dtype=tf.float32)
 
 
     def attention(self, query, key, value, d_k, mask, name='attention'):
         with tf.variable_scope(name):
             with tf.name_scope('attention_weights'):
+                #tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
                 scores = tf.divide(tf.matmul(query, tf.transpose(key, perm=[0, 2, 1])),tf.math.sqrt(d_k))
                 masked_scores = tf.multiply(mask, scores)
                 self.p_attn = tf.nn.softmax(masked_scores, axis = -1)
@@ -157,7 +159,8 @@ class GraphATTNMPMH(GraphATTNSP):
         state = self.x[:,:,:settings.input_dim]
         cmd = self.x[:,:,-settings.cmd_dim:]
         mask = self.make_causal_mask(settings.sequence_length)
-        tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
+        #print(mask.shape)
+        #tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         # Embedding
         self.embbed_state = tf.layers.dense(state, model_depth, use_bias=False, activation=None, name='state_embedding')
         self.embbed_cmd = tf.layers.dense(cmd, model_depth, use_bias=False, activation=None, name='cmd_embedding')
@@ -177,14 +180,14 @@ class GraphATTNMPMH(GraphATTNSP):
         self.state_attn = self.attention(self.SQW, self.SKW, self.SVW, float(model_depth), mask, name='state_attn')
         self.cmd_attn = self.attention(self.CQW, self.CKW, self.CVW, float(model_depth), mask, name='cmd_attn')
         self.concat = tf.concat([self.state_attn, self.cmd_attn], axis=-1)
-        self.pcoded_fusion = self.positional_encoding(self.concat, model_depth*2, settings.sequence_length, name='fusion_positional_embedding')
-        with tf.name_scope('fuse_qkv_projection'):
-            self.FQW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_q_projection')
-            self.FKW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_k_projection')
-            self.FVW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_v_projection')
-        self.xr = self.attention(self.FQW, self.FKW, self.FVW, float(model_depth), mask, name='fused_attn')
+        #self.pcoded_fusion = self.positional_encoding(self.concat, model_depth*2, settings.sequence_length, name='fusion_positional_embedding')
+        #with tf.name_scope('fuse_qkv_projection'):
+        #    self.FQW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_q_projection')
+        #    self.FKW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_k_projection')
+        #    self.FVW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_v_projection')
+        #self.xr = self.attention(self.FQW, self.FKW, self.FVW, float(model_depth), mask, name='fused_attn')
         # FeedForward
-        self.xc = self.xr
+        self.xc = self.concat
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
@@ -195,12 +198,12 @@ class GraphATTNMPMH(GraphATTNSP):
         # Loss
         with tf.name_scope('loss_ops'):
             a = tf.range(settings.sequence_length,dtype=tf.float32)
-            self.loss_weights = tf.pow(alpha, a)
+            self.loss_weights = tf.pow(alpha,a)
             tf.summary.histogram('sequence_weights', self.loss_weights)
             self.diff = tf.square(tf.subtract(self.ys_, self.y))
             self.seq_loss = tf.multiply(tf.reduce_mean(self.diff, axis = -1),self.loss_weights)
             self.s_loss = tf.reduce_mean(self.seq_loss, axis = 1)
-            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))/tf.reduce_mean(self.loss_weights)
             tf.summary.scalar('w_loss', self.w_loss)
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
