@@ -68,16 +68,13 @@ class GraphATTNSP:
 
     def make_causal_mask(self, size):
         with tf.name_scope('causal_mask'):
-            #return 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
-            return tf.cast(np.tril(np.ones((1,size,size)),k=0),dtype=tf.float32)#+np.triu(np.ones((1,size,size)),k=1)*1e-9,dtype=tf.float32)
-
+            return tf.linalg.band_part(tf.ones((1,size, size)), -1, 0)
 
     def attention(self, query, key, value, d_k, mask, name='attention'):
         with tf.variable_scope(name):
             with tf.name_scope('attention_weights'):
-                #tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
                 scores = tf.divide(tf.matmul(query, tf.transpose(key, perm=[0, 2, 1])),tf.math.sqrt(d_k))
-                masked_scores = tf.multiply(mask, scores)
+                masked_scores = tf.multiply(scores, mask) - (1-mask)*1e9
                 self.p_attn = tf.nn.softmax(masked_scores, axis = -1)
                 tf.summary.image('attn_weights', tf.expand_dims(self.p_attn,-1))
             return tf.matmul(self.p_attn, value)

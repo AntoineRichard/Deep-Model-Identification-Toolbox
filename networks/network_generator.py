@@ -468,7 +468,7 @@ def get_graph(settings):
         return ATTNSP_Generator(name, settings)
 
     elif name[0] == 'ATTNMP':
-        return ATTNMPMH_Generator(name,settings)
+        return ATTNMP_Generator(name,settings)
 
     elif name[0] == 'ATTNMPMH':
         return ATTNMPMH_Generator(name,settings)
