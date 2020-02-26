@@ -1,5 +1,5 @@
 # MODEL SEARCH
-network_list="/cs-share/dream/systemid_v2/scripts/network_list/GRU_networks_LRELU.txt"
+network_list="/home/gt_ari/systemid_v2/scripts/network_list/ATTNMPMH_networks_LRELU.txt"
 
 # VALIDATION PARAMETERS
 run_max=2
@@ -12,26 +12,27 @@ batch_size=64
 batch_test_size=10000
 batch_val_size=10000
 drop_rate=0.1
-learning_rate=0.005
+learning_rate=0.001
 traj_length=20
 
 # PATH
-root="/cs-share/dream/systemid_v2"
-training_set="$root/data/simu/train-full-random"
-validation_set="$root/data/simu/val"
-test_set="$root/data/simu/test"
+root="/home/gt_ari/systemid_v2"
+root2="/scratch/gt_ari"
+training_set="$root2/data_RSS/simu/train-full-random"
+validation_set="$root2/data_RSS/simu/val"
+test_set="$root2/data_RSS/simu/test"
 python_script="$root/networks/run_training.py"
 
 # OUTPUT
-output_root="/cs-share/dream/RSS-2020-Priorization"
-to_file="$output_root/model_search_gru_full_random.txt"
-save_suffix="$output_root/results/GS/GRU_full_random"
-tb_suffix="$output_root/tensorboard/GS/GRU_full_random"
+output_root="/scratch/gt_ari/RSS-2020-Models"
+to_file="$output_root/model_search_attnmpmh_full_random.txt"
+save_suffix="$output_root/results/GS/ATTNMPMH_full_random"
+tb_suffix="$output_root/tensorboard/GS/ATTNMPMH_full_random"
 
 # INIT
 mkdir -p ${output_root}
 
-while IFS= read -r model
+while IFS= read -r model        
 do
 	for run in $(seq 0 $run_max)
 	do
