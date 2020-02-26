@@ -470,13 +470,13 @@ class H5Reader_Seq2Seq(H5Reader):
             if not (self.sts.continuity_idx is None):
                 # 1 sequence is continuous 0 otherwise.
                 vx = x[i:i+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
-                vy = y[i+1+self.sequence_length:i+1+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
+                vy = y[i+1+self.sts.sequence_length:i+1+self.sts.sequence_length+self.sts.trajectory_length, self.sts.continuity_idx]
                 # Check sequence is fine, if not skip sequence.
                 if ((np.max(vx) > 1) or (np.max(vy) > 1)):
                     continue
                 else:
                     nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length, value_x_idx])
-                    nY.append(y[i+1+self.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
             else:
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
                 nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])

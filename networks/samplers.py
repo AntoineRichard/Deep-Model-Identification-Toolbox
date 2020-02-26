@@ -75,7 +75,7 @@ class UniformSampler:
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         if self.sts.val_batch_size is None:
-            return self.shuffle(self.DS.val_x, self.DS.val_y)
+            return self.shuffle(self.DS.train_x, self.DS.train_y)
         try:
             return next(self.TBE)
         except:
@@ -88,7 +88,7 @@ class UniformSampler:
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
         if self.sts.test_batch_size is None:
-            return self.shuffle(self.DS.val_x, self.DS.val_y)
+            return self.shuffle(self.DS.test_x, self.DS.test_y)
         try:
             return next(self.TeB)
         except:
@@ -296,6 +296,8 @@ class RNNSampler(UniformSampler):
         This function returns the train batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
+        if self.sts.val_batch_size is None:
+            return self.shuffle(self.DS.train_x, self.DS.train_y)
         try:
             return next(self.TBE)
         except:
@@ -307,6 +309,8 @@ class RNNSampler(UniformSampler):
         This function returns the test batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
+        if self.sts.test_batch_size is None:
+            return self.shuffle(self.DS.test_x, self.DS.test_y)
         try:
             return next(self.TeB)
         except:
@@ -318,6 +322,8 @@ class RNNSampler(UniformSampler):
         This function returns the val batch along with the percentage of completion
         of the epoch: epoch_completion, Batch_x, Batch_y.
         """
+        if self.sts.val_batch_size is None:
+            return self.shuffle(self.DS.val_x, self.DS.val_y)
         try:
             return next(self.TvB)
         except:

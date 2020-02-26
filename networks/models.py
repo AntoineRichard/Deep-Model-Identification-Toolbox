@@ -50,7 +50,7 @@ class GraphATTNSP:
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
             if layer_type == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
+        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -69,11 +69,14 @@ class GraphATTNSP:
     def make_causal_mask(self, size):
         with tf.name_scope('causal_mask'):
             return tf.linalg.band_part(tf.ones((1,size, size)), -1, 0)
+            #return tf.cast(np.tril(np.ones((1,size,size)),k=0),dtype=tf.float32)
+
 
     def attention(self, query, key, value, d_k, mask, name='attention'):
         with tf.variable_scope(name):
             with tf.name_scope('attention_weights'):
                 scores = tf.divide(tf.matmul(query, tf.transpose(key, perm=[0, 2, 1])),tf.math.sqrt(d_k))
+                #masked_scores = tf.multiply(mask, scores)
                 masked_scores = tf.multiply(scores, mask) - (1-mask)*1e9
                 self.p_attn = tf.nn.softmax(masked_scores, axis = -1)
                 tf.summary.image('attn_weights', tf.expand_dims(self.p_attn,-1))
@@ -112,7 +115,7 @@ class GraphATTNMP(GraphATTNSP):
             self.KW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='k_projection')
             self.VW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='v_projection')
         # Attention mechanism
-        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask)
+        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask, name='full_attn')
         # FeedForward
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
@@ -120,7 +123,7 @@ class GraphATTNMP(GraphATTNSP):
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
             if layer_type == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
+        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -156,41 +159,36 @@ class GraphATTNMPMH(GraphATTNSP):
         state = self.x[:,:,:settings.input_dim]
         cmd = self.x[:,:,-settings.cmd_dim:]
         mask = self.make_causal_mask(settings.sequence_length)
-        #print(mask.shape)
         #tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         # Embedding
-        self.embbed_state = tf.layers.dense(state, model_depth, use_bias=False, activation=None, name='state_embedding')
-        self.embbed_cmd = tf.layers.dense(cmd, model_depth, use_bias=False, activation=None, name='cmd_embedding')
+        self.embbed_state = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, use_bias=False, activation=None, name='state_embedding'))(state)
+        self.embbed_cmd = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, use_bias=False, activation=None, name='cmd_embedding'))(cmd)
         # Positional Embedding
         self.pcoded_state = self.positional_encoding(self.embbed_state, model_depth, settings.sequence_length, name='state_positional_embedding')
         self.pcoded_cmd = self.positional_encoding(self.embbed_cmd, model_depth, settings.sequence_length, name='cmd_positional_embedding')
         # Attention Projection
         with tf.name_scope('state_qkv_projection'):
-            self.SQW = tf.layers.dense(self.pcoded_state, model_depth, activation=act, name='state_q_projection')
-            self.SKW = tf.layers.dense(self.pcoded_state, model_depth, activation=act, name='state_k_projection')
-            self.SVW = tf.layers.dense(self.pcoded_state, model_depth, activation=act, name='state_v_projection')
+            self.SQW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='state_q_projection'))(self.pcoded_state)
+            self.SKW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='state_k_projection'))(self.pcoded_state)
+            self.SVW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='state_v_projection'))(self.pcoded_state)
         with tf.name_scope('cmd_qkv_projection'):
-            self.CQW = tf.layers.dense(self.pcoded_cmd, model_depth, activation=act, name='cmd_q_projection')
-            self.CKW = tf.layers.dense(self.pcoded_cmd, model_depth, activation=act, name='cmd_k_projection')
-            self.CVW = tf.layers.dense(self.pcoded_cmd, model_depth, activation=act, name='cmd_v_projection')
+            self.CQW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='cmd_q_projection'))(self.pcoded_cmd)
+            self.CKW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='cmd_k_projection'))(self.pcoded_cmd)
+            self.CVW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='cmd_v_projection'))(self.pcoded_cmd)
         # Attention mechanism
         self.state_attn = self.attention(self.SQW, self.SKW, self.SVW, float(model_depth), mask, name='state_attn')
+        self.p_attn_state = self.p_attn
         self.cmd_attn = self.attention(self.CQW, self.CKW, self.CVW, float(model_depth), mask, name='cmd_attn')
+        self.p_attn_cmd = self.p_attn
         self.concat = tf.concat([self.state_attn, self.cmd_attn], axis=-1)
-        #self.pcoded_fusion = self.positional_encoding(self.concat, model_depth*2, settings.sequence_length, name='fusion_positional_embedding')
-        #with tf.name_scope('fuse_qkv_projection'):
-        #    self.FQW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_q_projection')
-        #    self.FKW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_k_projection')
-        #    self.FVW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_v_projection')
-        #self.xr = self.attention(self.FQW, self.FKW, self.FVW, float(model_depth), mask, name='fused_attn')
         # FeedForward
         self.xc = self.concat
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
+                self.xc = tf.keras.layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc)
+        self.ys_ = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -234,7 +232,7 @@ class GraphMLP:
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
             if layer_type == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
 
         # Loss
         with tf.name_scope('loss_ops'):
@@ -302,7 +300,7 @@ class GraphMLP_CPLX:
         with tf.name_scope('Activation'):
             self.xr = tf.math.real(biasadd)
 
-        self.y_ = tf.layers.dense(self.xr, settings.output_dim,  activation=None, name='output')
+        self.y_ = tf.layers.dense(self.xr, settings.output_dim,  activation=None, name='outputs')
         # Loss
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.yr))
@@ -348,7 +346,7 @@ class GraphCNN:
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
             if layer_type == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
 
         # Loss
         with tf.name_scope('loss_ops'):
@@ -372,7 +370,7 @@ class GraphRNN:
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'inputs')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
         self.hs = tf.placeholder(tf.float32, [recurrent_layers, None, hidden_state], name = 'hidden_state')
         self.step = tf.placeholder(tf.int32, name='step')
@@ -409,7 +407,7 @@ class GraphRNN:
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
             if layer == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
         # Losses
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.y))
@@ -435,7 +433,7 @@ class GraphGRU:
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'inputs')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
         self.hs = tf.placeholder(tf.float32, [recurrent_layers, None, hidden_state], name = 'hidden_state')
         self.step = tf.placeholder(tf.int32, name='step')
@@ -472,7 +470,7 @@ class GraphGRU:
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
             if layer == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
         # Losses
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.y))
@@ -498,7 +496,7 @@ class GraphLSTM:
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'inputs')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
         self.hs = tf.placeholder(tf.float32, [recurrent_layers, 2, None, hidden_state], name = 'hidden_state')
         self.step = tf.placeholder(tf.int32, name='step')
@@ -538,7 +536,7 @@ class GraphLSTM:
                 self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
             if layer == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
         # Losses
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.y))

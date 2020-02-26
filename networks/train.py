@@ -11,8 +11,6 @@ import settings
 import network_generator
 
 #TODO fix depecrated for full binding with TensorFlow 1.14.0
-#TODO TEST model weight and inference time
-#TODO use MSE instead of RMSE
 
 class Training_Uniform:
     """
@@ -275,7 +273,7 @@ class Training_Uniform:
         np.save(self.sts.output_dir + "/std.npy", self.DS.std)
         
         # Write networks statistics
-        with open(os.path.join(self.sts.output_dir,'statistics.txt'), 'a') as stats:
+        with open(os.path.join(self.sts.output_dir,'statistics.txt'), 'w') as stats:
             stats.write('network parameters: ' + str(self.get_model_parameters()) + os.linesep)
             stats.write('network forward time: ' + str(np.mean(self.forward_time)) + ' batch_size (' + str(self.sts.val_batch_size) + ')' + os.linesep)
             stats.write('network backward time: ' + str(np.mean(self.backward_time)) + ' batch_size (' + str(self.sts.batch_size) + ')' + os.linesep)
@@ -333,6 +331,12 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         self.train_val_hs = self.M.get_hidden_state(self.sts.val_batch_size)
         self.val_hs = self.M.get_hidden_state(self.sts.val_batch_size)
         self.val_traj_hs = self.M.get_hidden_state(self.sts.val_traj_batch_size)
+        #if self.test_batch_size = None:
+        #    self.test_hs = self.M.get_hidden_state(self.DS.test_x.shape[0])
+        #    self.test_traj_hs = self.M.get_hidden_state(self.DS.test_x.shape[0])
+        #else:
+        self.test_hs = self.M.get_hidden_state(self.sts.test_batch_size)
+        self.test_traj_hs = self.M.get_hidden_state(self.sts.test_traj_batch_size)
 
     def train_step(self, i):
         """
@@ -414,6 +418,7 @@ class Training_RNN_Seq2Seq(Training_Uniform):
         self.test_writer.add_summary(summaries, i)
         # Return accuracy for console display
         return acc
+    
         
     def get_predictions(self, full, hs, i):
         """
@@ -705,7 +710,7 @@ class Training_PER(Training_Uniform):
                 self.SR.update_weights(loss)
         # Train
         batch_x, batch_y, weights = self.SR.sample_train_batch(self.sts.batch_size)
-        _ = self.sess.run(self.M.train_step, feed_dict = {self.M.x: batch_x,
+        _, s_loss, s_weights= self.sess.run([self.M.train_step, self.M.s_loss, self.M.weights], feed_dict = {self.M.x: batch_x,
                                                           self.M.y: batch_y,
                                                           self.M.weights: weights,
                                                           self.M.keep_prob: self.sts.dropout,

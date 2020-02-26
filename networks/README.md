@@ -1,36 +1,6 @@
-# Deep ID : a simple deep-learning based identification toolbox
+# The Framework
 
-Deep ID features all of the most common, and state of the art architectures for deep system identification.
-It comes with a command line model generator, for MLPs, 1D CNNs, RNNs, LSTMs, GRUs and Attention based models.
-Additionnaly this toolbox provide support for advanced data handling such as continuous-time seq2seq.
-Finally, Deep ID implements the most common tools for proper model evaluation such has k-fold Cross Validation,
-singlestep and multistep error evaluation along with a TensorBoard backend for visualization. 
-With over 35 parameters available from command line Deep ID is extremely flexible making grid searches for optimal
-parameters easy and efficient. More about Deep ID below.
-
-## Using DeepID
-
-This section covers how to use the DeepID toolbox.
-
-### Prerequisite
-
-To run DeepID you need:
-- TensorFlow v1.14.0 (and the associated CUDA/CUDNN requirements)
-- Scikit-Learn
-- Numpy
-- Python3 **(REQUIRED FOR TRAINING ONLY)**
-
-This Framework was sucessfully tested on the
-following system architectures PPC64, AARCH64 and x64. 
-
-### Running DeepID
-To run DeepID issue the following command:
-
- - ``python3 rules.py ''A list of arguments''``
-
-To learn more about the available arguments please refere to the Settings section.
-
-## The Framework
+## Overview
 
 This section covers the different element of the framework and how they interact. As of now the framework
 is articulated around 6 blocks:
@@ -162,44 +132,57 @@ In the end you can specify a MLP model as follows:
 - --model MLP\_TANH\_r\_d16
 - --model MLP\_LRELU\_d64\_r\_d128\_r\_d16
 
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
 > Future plans include batch normalization.
 
-### MLP Models
-For the MLP the command line generator support 2 layers:
+### Complex MLP Models
+For the Complex value MLP the command line generator support 2 layers:
 - Dense layer : 'd'
 - Dropout layer : 'r'
 
 To generate a model the user has to use the --model argument and add a string after it.
 Each word that are going to compose this string have to be separated by an underscore.
-The first word defines the model type, in our case: MLP. The second defines the type of
+The first word defines the model type, in our case: a CPLXMLP. The second defines the type of
+activation funtion that are going to be used in the model. Then the user must specify the 
+layers he wants to use in a sequential order.
+
+
+In the end you can specify a Complex valued MLP model as follows:
+
+- --model CPLXMLP\_RELU\_d32\_d32
+- --model CPLXMLP\_TANH\_r\_d16
+- --model CPLXMLP\_LRELU\_d64\_r\_d128\_r\_d16
+
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
+> Future plans include batch normalization.
+
+### 1D CNN Models
+For the MLP the command line generator support 4 layers:
+- Convolution layers: 'k' followed by a number, followed by 'c',
+                          followed by another number: k3c64 is a 
+                          convolution of kernel size 3 with a depth
+                          of 64. 
+- Pooling layers: 'p' followed by a number: p2 is a pooling layer with
+                      a kernel size of 2, with stride 2.
+- Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layers: 'r', the keeprate is defined when starting
+                      the training.
+
+To generate a model the user has to use the --model argument and add a string after it.
+Each word that are going to compose this string have to be separated by an underscore.
+The first word defines the model type, in our case: CNN. The second defines the type of
 activation funtion that are going to be used in the model. Then the user must specify the 
 layers he wants to use in a sequential order.
 
 
 In the end you can specify a MLP model as follows:
 
-- --model MLP\_RELU\_d32\_d32
-- --model MLP\_TANH\_r\_d16
-- --model MLP\_LRELU\_d64\_r\_d128\_r\_d16
+- --model CNN\_RELU\_k3c64\_p2\_d32
+- --model CNN\_TANH\_k5c32\_p2\_k3c128\_r\_d16
+- --model CNN\_LRELU\_k5c64\_r\_d128\_r\_d16
 
-> Future plans include batch normalization.
-
-### MLP Models
-For the MLP the command line generator support 2 layers:
-- Dense layer : 'd'
-- Dropout layer : 'r'
-
-To generate a model the user has to use the --model argument and add a string after it.
-Each word that are going to compose this string have to be separated by an underscore.
-The first word defines the model type, in our case: MLP. The second defines the type of
-activation funtion that are going to be used in the model. Then the user must specify the 
-layers he wants to use in a sequential order.
-
-
-In the end you can specify a MLP model as follows:
-
-- --model MLP\_RELU\_d32\_d32
-- --model MLP\_TANH\_r\_d16
-- --model MLP\_LRELU\_d64\_r\_d128\_r\_d16
-
-> Future plans include batch normalization.
+> Please note that when using a dense layer for the first time the output of the feature extractor is automically flatenned. Hence one cannot do: --model CNN\_TANH\_k3c32\_d16\_k3c32. Also one must specify at least one dense layer after the feature extractor. Hence one cannot do: --model CNN\_TANH\_k3c32.
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
+> Future plans include batch normalization, and Fully Convolutional support.

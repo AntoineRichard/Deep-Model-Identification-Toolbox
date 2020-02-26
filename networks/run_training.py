@@ -79,8 +79,10 @@ def check_if_completed(sts):
         exit(0)
     
 if __name__ == "__main__":
+    print("training")
     settings = Settings()
     check_if_completed(settings)
     import train
+    print("still training")
     select_train_object(settings)
-
+    print("done training")
