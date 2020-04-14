@@ -1,5 +1,7 @@
 import models
 import tensorflow as tf
+import warnings
+from tensorflow.keras import layers as Layers
 
 #TODO add support for dropout in MLP/CNN
 
@@ -7,14 +9,34 @@ def get_activation(name):
     """
     Parses a string to extract the activation function.
     """
-    if name[1] == 'RELU':
-        activation = tf.nn.relu
-    elif name[1] == 'TANH':
-        activation = tf.nn.tanh
-    elif name[1] == 'SIGMOID':
-        activation = tf.nn.sigmoid
-    elif name[1] == 'LRELU':
-        activation = tf.nn.leaky_relu
+    string = name[1].split(':')
+
+    if string[0] == 'RELU':
+        activation = Layers.ReLU()
+    elif string[0] == 'TANH':
+        activation = Layers.Activation(tf.keras.activations.tanh)
+    elif string[0] == 'SIGMOID':
+        activation = Layers.Activation(tf.keras.activations.sigmoid)
+    elif string[0] == 'LRELU':
+        try:
+            activation = Layers.LeakyReLU(float(string[1]))
+        except:
+            warnings.warn('Using default alpha parameter : 0.1.', SyntaxWarning)
+            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
+            activation = Layers.LeakyReLU(0.1)
+    elif string[0] == 'PRELU':
+        activation = Layers.PReLU()
+    elif string[0] == 'ELU':
+        try:
+            activation = Layers.ELU(float(string[1]))
+        except:
+            warnings.warn('Using default alpha parameter : 1.0.', SyntaxWarning)
+            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
+            activation = Layers.ELU(1.0)
+    elif string[0] == 'SELU':
+        activation = Layers.Activation(tf.keras.activations.selu)
+    elif string[0] == 'SWISH':
+        activation = Layers.Activation(tf.nn.swish)
     else:
         raise ValueError('error: unknown activation function')
     return activation
@@ -440,7 +462,7 @@ def ATTNMP_Generator(name,settings):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphATTNMP(settings, alpha, model_depth, layer_type, layer_param, act=activation)
 
-def get_graph(settings):
+def get_graph(settings,name='net'):
     """
     Generatates advanced models based on a simple string. Each
     condition in the if loop is a different model.

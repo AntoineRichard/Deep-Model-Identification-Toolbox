@@ -37,7 +37,7 @@ def select_train_object(sts):
             if sts.priorization == 'uniform':
                 train.Training_Seq2Seq(sts)
             elif ((sts.priorization == 'PER') or (sts.priorization == 'per')):
-                raise Exception('PER is not yet supported for seq2seq models.')
+                train.Training_Seq2Seq_PER(sts)
             elif ((sts.priorization == 'GRAD') or (sts.priorization == 'grad')):
                 raise Exception('Gradient upperbound is not yet supported for seq2seq models.')
             else:
@@ -71,6 +71,8 @@ def select_train_object(sts):
                 raise Exception('Unknown priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
         else:
             raise Exception('Unknown model.')
+    elif sts.reader_mode == 'co_teaching':
+        train.Training_CoTeaching(sts)
     else:
         raise Exception('Unknown reader mode. Currently supported modes are: classic, seq2seq, continuous_seq2seq')
 

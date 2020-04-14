@@ -33,6 +33,9 @@ class Settings:
         self.per_refresh_rate = None
         # Grad settings
         self.superbatch_size = None
+        # Co-Teaching settings
+        self.tau    = None
+        self.k_iter = None
         # Data settings
         self.sequence_length   = None 
         self.forecast          = None
@@ -93,6 +96,9 @@ class Settings:
         parser.add_argument('--update_batchsize', type=int, required=False, help='Size of the batch when updating weights')
         # Grad settings
         parser.add_argument('--superbatch_size', type=int, required=False, help='size of the super batch if using gradient upper-bound priorization scheme')
+        # Grad settings
+        parser.add_argument('--tau', type=float, required=False, help='error estimate')
+        parser.add_argument('--k_iter', type=int, required=False, help='iteration after which the network starts to overfit outliers')
         # Data settings
         parser.add_argument('--max_sequence_size', type=int, default='12', help='number of points used to predict the outputs')
         parser.add_argument('--forecast', type=int, default='1', help='number of points to predict')
@@ -107,8 +113,8 @@ class Settings:
         parser.add_argument('--batch_size', type=int, default='32', help='size of the train batch')
         parser.add_argument('--val_batch_size', type=int, help='size of the validation batch')
         parser.add_argument('--val_traj_batch_size', type=int, default = 1000, help='size of the trajectory validation batch')
-        parser.add_argument('--test_batch_size', type=int, help='size of the test batch')
-        parser.add_argument('--test_traj_batch_size', type=int, default = 1000, help='size of the trajectory test batch')
+        parser.add_argument('--test_batch_size', type=int, required=False, help='size of the test batch')
+        parser.add_argument('--test_traj_batch_size', type=int, required=False, help='size of the trajectory test batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
         parser.add_argument('--log_frequency', type=int, default='25', help='Loging frequency in batch.')
         parser.add_argument('--learning_rate', type=float, default='0.005', help='the learning rate')
@@ -151,6 +157,9 @@ class Settings:
         self.per_refresh_rate = args.per_refresh_rate
         # Grad settings
         self.superbatch_size = args.superbatch_size
+        # Grad settings
+        self.tau = args.tau
+        self.k_iter = args.k_iter
         # Data settings
         self.sequence_length   = args.max_sequence_size
         self.forecast          = args.forecast

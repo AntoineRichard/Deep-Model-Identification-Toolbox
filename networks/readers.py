@@ -828,6 +828,9 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
             else:
                 test_x, test_y, self.test_traj_x, self.test_traj_y, test_seq_c = self.load(self.sts.test_dir)
                 val_x, val_y, self.val_traj_x, self.val_traj_y, val_seq_c = self.load(self.sts.val_dir)
+                self.train_sc = seq_c
+                self.test_sc = test_seq_c
+                self.val_sc = val_seq_c
         elif self.sts.test_dir is None and self.sts.val_dir is not None:
             raise('Test root was not provided but validation root was, provide none or both.')
         elif self.sts.val_dir is None and self.sts.test_dir is not None:

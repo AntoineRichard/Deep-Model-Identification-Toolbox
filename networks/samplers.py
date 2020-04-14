@@ -126,7 +126,10 @@ class UniformSampler:
         np.random.shuffle(s)
         x = self.DS.test_traj_x[s].copy()
         y = self.DS.test_traj_y[s].copy()
-        return x[:self.sts.test_traj_batch_size], y[:self.sts.test_traj_batch_size]
+        if self.sts.test_traj_batch_size is None:
+            return x, y
+        else:
+            return x[:self.sts.test_traj_batch_size], y[:self.sts.test_traj_batch_size]
 
 class PERSampler(UniformSampler):
     """

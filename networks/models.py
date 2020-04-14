@@ -1,20 +1,36 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras import layers as Layers
 
 def accuracy(est, gt):
     with tf.name_scope('accuracy_op'):
-        diff = tf.sqrt(tf.square(tf.subtract(est, gt)))
-        accuracy = tf.reduce_mean(tf.cast(diff, tf.float32),axis = 0)
-        std_dev = tf.math.reduce_std(tf.cast(diff, tf.float32), axis = 0)
+        diff = tf.square(tf.subtract(est, gt))
+        accuracy = tf.sqrt(tf.reduce_mean(tf.cast(diff, tf.float32),axis = 0))
         tf.summary.scalar('accuracy', tf.reduce_mean(accuracy))
-        tf.summary.scalar('std_dev', tf.reduce_mean(std_dev))
-    return accuracy, std_dev
+    return accuracy
 
 def train_fn(loss, learning_rate):
     with tf.name_scope('train'):
         tf.summary.scalar('learning_rate', learning_rate)
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
     return train_step
+
+class SWISH1(Layers.Layer):
+    def __init__(self):
+        super(SWISH1, self).__init__()
+        self.beta = tf.constant(1.0, dtype='float32')
+
+    def call(self, inputs):
+        return tf.math.multiply(inputs,tf.math.multiply(self.beta, tf.nn.sigmoid(inputs)))
+
+class SWISH(Layers.Layer):
+    def __init__(self):
+        super(SWISH, self).__init__()
+        self.beta = tf.Variable(tf.random_normal_initializer(shape=(0)),dtype='float32')
+
+    def call(self, inputs):
+        return tf.math.multiply(inputs,tf.math.multiply(self.beta, tf.nn.sigmoid(inputs)))
+
 
 class GraphATTNSP:
     """
@@ -33,24 +49,24 @@ class GraphATTNSP:
         tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
         # Embedding
-        self.embbed = tf.layers.dense(self.x, model_depth, use_bias=False, activation=None)
+        self.embbed = Layers.TimeDistributed(Layers.Dense( model_depth, use_bias=False, activation=None))(self.x)
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
         # Attention Projection
         with tf.name_scope('qkv_projection'):
-            self.QW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='q_projection')
-            self.KW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='k_projection')
-            self.VW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='v_projection')
+            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='q_projection'))(self.pcoded)
+            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='k_projection'))(self.pcoded)
+            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='v_projection'))(self.pcoded)
         # Attention mechanism
-        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask)
+        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask, name='full_attn')
         # FeedForward
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+                self.xc = Layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -61,7 +77,7 @@ class GraphATTNSP:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -106,24 +122,24 @@ class GraphATTNMP(GraphATTNSP):
         # Reshape
         mask = self.make_causal_mask(settings.sequence_length)
         # Embedding
-        self.embbed = tf.layers.dense(self.x, model_depth, use_bias=False, activation=None)
+        self.embbed = Layers.TimeDistributed(Layers.Dense( model_depth, use_bias=False, activation=None))(self.x)
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
         # Attention Projection
         with tf.name_scope('qkv_projection'):
-            self.QW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='q_projection')
-            self.KW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='k_projection')
-            self.VW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='v_projection')
+            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='q_projection'))(self.pcoded)
+            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='k_projection'))(self.pcoded)
+            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='v_projection'))(self.pcoded)
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask, name='full_attn')
         # FeedForward
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
+                self.xc = Layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -138,7 +154,7 @@ class GraphATTNMP(GraphATTNSP):
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.y[:,-1,:])
+        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -159,22 +175,21 @@ class GraphATTNMPMH(GraphATTNSP):
         state = self.x[:,:,:settings.input_dim]
         cmd = self.x[:,:,-settings.cmd_dim:]
         mask = self.make_causal_mask(settings.sequence_length)
-        #tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         # Embedding
-        self.embbed_state = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, use_bias=False, activation=None, name='state_embedding'))(state)
-        self.embbed_cmd = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, use_bias=False, activation=None, name='cmd_embedding'))(cmd)
+        self.embbed_state = tf.keras.layers.TimeDistributed(Layers.Dense(model_depth, use_bias=False, activation=None, name='state_embedding'))(state)
+        self.embbed_cmd = tf.keras.layers.TimeDistributed(Layers.Dense(model_depth, use_bias=False, activation=None, name='cmd_embedding'))(cmd)
         # Positional Embedding
         self.pcoded_state = self.positional_encoding(self.embbed_state, model_depth, settings.sequence_length, name='state_positional_embedding')
         self.pcoded_cmd = self.positional_encoding(self.embbed_cmd, model_depth, settings.sequence_length, name='cmd_positional_embedding')
         # Attention Projection
         with tf.name_scope('state_qkv_projection'):
-            self.SQW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='state_q_projection'))(self.pcoded_state)
-            self.SKW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='state_k_projection'))(self.pcoded_state)
-            self.SVW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='state_v_projection'))(self.pcoded_state)
+            self.SQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='state_q_projection'))(self.pcoded_state)
+            self.SKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='state_k_projection'))(self.pcoded_state)
+            self.SVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='state_v_projection'))(self.pcoded_state)
         with tf.name_scope('cmd_qkv_projection'):
-            self.CQW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='cmd_q_projection'))(self.pcoded_cmd)
-            self.CKW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='cmd_k_projection'))(self.pcoded_cmd)
-            self.CVW = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(model_depth, activation=act, name='cmd_v_projection'))(self.pcoded_cmd)
+            self.CQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='cmd_q_projection'))(self.pcoded_cmd)
+            self.CKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='cmd_k_projection'))(self.pcoded_cmd)
+            self.CVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='cmd_v_projection'))(self.pcoded_cmd)
         # Attention mechanism
         self.state_attn = self.attention(self.SQW, self.SKW, self.SVW, float(model_depth), mask, name='state_attn')
         self.p_attn_state = self.p_attn
@@ -185,10 +200,10 @@ class GraphATTNMPMH(GraphATTNSP):
         self.xc = self.concat
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.keras.layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc)
-        self.ys_ = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
+                self.xc = Layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -203,7 +218,7 @@ class GraphATTNMPMH(GraphATTNSP):
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.y[:,-1,:])
+        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -212,8 +227,8 @@ class GraphMLP:
     """
     MLP.
     """
-    def __init__(self, settings, layers, params, act=tf.nn.relu):
-
+    def __init__(self, settings, layers, params, act=Layers.ReLU()):
+       
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
@@ -229,10 +244,10 @@ class GraphMLP:
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.Dense(params[i], activation=act, name='dense_'+str(i))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
+                self.xc = Layers.Dropout(1-self.keep_prob, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.y_ = Layers.Dense(settings.output_dim, activation=None, name='outputs')(self.xc)
 
         # Loss
         with tf.name_scope('loss_ops'):
@@ -243,7 +258,7 @@ class GraphMLP:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -310,7 +325,7 @@ class GraphMLP_CPLX:
             tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -336,17 +351,17 @@ class GraphCNN:
         self.xc = self.x
         for i, layer_type in enumerate(layers):
             if layer_type == 'conv':
-                self.xc = tf.layers.conv1d(self.xc, params[i][0], params[i][1], padding='same', activation=act, name='conv1D_'+str(i))
+                self.xc = tf.layers.Conv1D(params[i][0], params[i][1], padding='same', activation=act, name='conv1D_'+str(i))(self.xc)
             if layer_type == 'pool':
-                self.xc = tf.layers.max_pooling1d(self.xc, params[i], params[i], padding='same', name='max_pool1D_'+str(i))
+                self.xc = Layers.MaxPool1D(params[i], params[i], padding='same', name='max_pool1D_'+str(i))(self.xc)
             if layer_type == 'dense':
                 if must_reshape:
-                    self.xc = tf.layers.flatten(self.xc, name='flatten')
+                    self.xc = Layers.Flatten(name='flatten')(self.xc)
                     must_reshape = False
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.Dense(params[i], activation=act, name='dense_'+str(i))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
+                self.xc = tf.layers.dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.y_ = Layers.Dense(settings.output_dim, activation=None, name='outputs')(self.xc)
 
         # Loss
         with tf.name_scope('loss_ops'):
@@ -357,7 +372,7 @@ class GraphCNN:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -417,7 +432,7 @@ class GraphRNN:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_[-1], self.y[-1])
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -480,7 +495,7 @@ class GraphGRU:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_[-1], self.y[-1])
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -546,7 +561,7 @@ class GraphLSTM:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_[-1], self.y[-1])
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
