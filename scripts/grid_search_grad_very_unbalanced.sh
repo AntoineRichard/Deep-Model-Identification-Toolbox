@@ -18,16 +18,16 @@ traj_length=20
 
 # PATH
 root="/cs-share/dream/systemid_v2"
-training_set="$root/data/simu/train-full-unbalanced"
+training_set="$root/data/simu/train-very-unbalanced"
 validation_set="$root/data/simu/val"
 test_set="$root/data/simu/test"
 python_script="$root/networks/run_training.py"
 
 # OUTPUT
 output_root="/cs-share/dream/RSS-2020-Priorization"
-to_file="$output_root/gridsearch_grad_full_unbalanced.txt"
-save_suffix="$output_root/results/GS/GRAD_full_unbalanced"
-tb_suffix="$output_root/tensorboard/GS/GRAD_full_unbalanced"
+to_file="$output_root/gridsearch_grad_very_unbalanced.txt"
+save_suffix="$output_root/results/GS/GRAD_very_unbalanced"
+tb_suffix="$output_root/tensorboard/GS/GRAD_very_unbalanced"
 
 # INIT
 mkdir -p ${output_root}

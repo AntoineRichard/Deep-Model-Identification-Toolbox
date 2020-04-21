@@ -12,34 +12,28 @@ def get_activation(name):
     string = name[1].split(':')
 
     if string[0] == 'RELU':
-        activation = Layers.ReLU()
+        pass
     elif string[0] == 'TANH':
-        activation = Layers.Activation(tf.keras.activations.tanh)
+        pass
     elif string[0] == 'SIGMOID':
-        activation = Layers.Activation(tf.keras.activations.sigmoid)
+        pass
     elif string[0] == 'LRELU':
-        try:
-            activation = Layers.LeakyReLU(float(string[1]))
-        except:
-            warnings.warn('Using default alpha parameter : 0.1.', SyntaxWarning)
-            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
-            activation = Layers.LeakyReLU(0.1)
+        pass
     elif string[0] == 'PRELU':
-        activation = Layers.PReLU()
+        pass
     elif string[0] == 'ELU':
-        try:
-            activation = Layers.ELU(float(string[1]))
-        except:
-            warnings.warn('Using default alpha parameter : 1.0.', SyntaxWarning)
-            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
-            activation = Layers.ELU(1.0)
+        pass
     elif string[0] == 'SELU':
-        activation = Layers.Activation(tf.keras.activations.selu)
+        pass
     elif string[0] == 'SWISH':
-        activation = Layers.Activation(tf.nn.swish)
+        pass
+    elif string[0] == 'CSWISH':
+        pass
+    elif string[0] == 'MISH':
+        pass
     else:
         raise ValueError('error: unknown activation function')
-    return activation
+    return name[1]
 
 def CNN_Generator(name,settings):
     """

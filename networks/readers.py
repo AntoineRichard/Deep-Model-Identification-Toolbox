@@ -303,7 +303,6 @@ class H5Reader:
         # Stores the indices of all the variables but the continuity index
         value_x_idx = [xx for xx in range(x.shape[1])if xx!=self.sts.continuity_idx]
         value_y_idx = [xx for xx in range(y.shape[1])if xx!=self.sts.continuity_idx]
-        
         # x is a sequence, y is the data-point or a sequence right after the sequence used as input
         for i in range(x.shape[0]-1-self.sts.sequence_length-self.sts.forecast):
             # First check continuity of the sequence if the flag is enabled
@@ -317,10 +316,10 @@ class H5Reader:
                     continue
                 else:
                     nX.append(x[i:i+self.sts.sequence_length, value_x_idx])
-                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+self.sts.sequence_length:i+self.sts.forecast+self.sts.sequence_length, value_y_idx])
             else:
                 nX.append(x[i:i+self.sts.sequence_length])
-                nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.forecast+self.sts.sequence_length])
+                nY.append(y[i+self.sts.sequence_length:i+self.sts.forecast+self.sts.sequence_length])
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
@@ -354,10 +353,10 @@ class H5Reader:
                     continue
                 else:
                     nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length,value_x_idx])
-                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+self.sts.sequence_length:i+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
             else:
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
-                nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
+                nY.append(y[i+self.sts.sequence_length:i+self.sts.sequence_length+self.sts.trajectory_length])
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
@@ -446,7 +445,7 @@ class H5Reader_Seq2Seq(H5Reader):
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
-    
+    ''' 
     def trajectory_generator(self, x, y):
         """
         Generates a trajectory of data to be fed to the network in a Seq2Seq fashion.
@@ -476,14 +475,14 @@ class H5Reader_Seq2Seq(H5Reader):
                     continue
                 else:
                     nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length, value_x_idx])
-                    nY.append(y[i+1+self.sts.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+self.sts.sequence_length:i+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
             else:
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
-                nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
+                nY.append(y[i+self.sts.sequence_length:i+self.sts.sequence_length+self.sts.trajectory_length])
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
-
+    '''
 class H5Reader_Seq2Seq_RNN(H5Reader):
     """
     A reader object made to be compatible with our datasets formating:
@@ -729,17 +728,17 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                 else:
                     seq_c.append(continuous)
                     nX.append(x[i:i+self.sts.sequence_length, value_x_idx])
-                    nY.append(y[i+1:i+1+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+1:i+self.sts.sequence_length+1, value_y_idx])
                     continuous = True
             else:
                 seq_c.append(continuous)
                 nX.append(x[i:i+self.sts.sequence_length])
-                nY.append(y[i+1:i+1+self.sts.sequence_length])
+                nY.append(y[i+1:i+self.sts.sequence_length+1])
                 continuous = True
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny, seq_c
-    
+    '''
     def trajectory_generator(self, x, y):
         """
         Generates a trajectory of data to be fed to the network in a Seq2Seq fashion.
@@ -769,14 +768,14 @@ class H5Reader_Seq2Seq_RNN(H5Reader):
                     continue
                 else:
                     nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length, value_x_idx])
-                    nY.append(y[i+1+self.sequence_length:i+1+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
+                    nY.append(y[i+self.sequence_length:i+self.sts.trajectory_length+self.sts.sequence_length, value_y_idx])
             else:
                 nX.append(x[i:i+self.sts.sequence_length+self.sts.trajectory_length])
-                nY.append(y[i+self.sts.sequence_length+1:i+1+self.sts.sequence_length+self.sts.trajectory_length])
+                nY.append(y[i+self.sts.sequence_length:i+self.sts.sequence_length+self.sts.trajectory_length])
         nx = np.array(nX)
         ny = np.array(nY)
         return nx, ny
-
+    '''
     def augment_seq(self, x, y, continuity, size):
         """
         Augments the data by rolling it. As detailed in the description of

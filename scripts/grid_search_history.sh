@@ -3,7 +3,7 @@ hist_max=20
 hist_min=1
 
 # VALIDATION PARAMETERS
-run_max=9
+run_max=4
 
 # TRAINING PARAMETERS
 iterations=30000

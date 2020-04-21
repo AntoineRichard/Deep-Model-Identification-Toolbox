@@ -5,7 +5,6 @@ from matplotlib import pyplot as plt
 import argparse
 import os
 import shutil
-import ast
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -45,6 +44,8 @@ def read_stats(path):
     return test_ss_accuracy, test_ms_accuracy, test_ms_std
 
 def read_statistics(folder):
+    forward_time = []
+    backward_time = []
     ss_accuracy = []
     ms_accuracy = []
     ms_std_dev = []
@@ -63,46 +64,50 @@ def get_statistics(args):
         os.mkdir(args.output)
     except:
         pass
+
     # Read files
     param_list = os.listdir(args.folder)
-    params = np.array(param_list).astype(np.int64)
-    params.sort()
-    bound = params.shape[0]
-    ss_mat = np.ones((bound))
-    ms_mat = np.ones((bound))
-    sss_mat = np.ones((bound))
-    mss_mat = np.ones((bound))
-    for i, param in enumerate(params):
-        ss_acc, ms_acc, ss_std, ms_std = read_statistics(os.path.join(args.folder,str(param)))
-        ss_mat[i] = ss_acc
-        ms_mat[i] = ms_acc
-        sss_mat[i] = ss_std
-        mss_mat[i] = ms_std
-    # SingleStep Accuracy Histogram
-    y1 = ss_mat - sss_mat
-    y2 = ss_mat + sss_mat
-    plt.plot(params, y1, params, y2, color='orange')
-    plt.fill_between(params, y1, y2, where=y2 >= y1, facecolor='orange', alpha=0.5, interpolate=True, label='std_dev')
-    plt.plot(params, ss_mat, color='C0', label='average')
-    plt.title('History ss: '+args.folder.split('/')[-1])
-    plt.xlabel('history length')
-    plt.ylabel('RMSE')
-    plt.legend()
-    plt.savefig(os.path.join(args.output,'ss_grid_search_plot.png'))
+    params = [x.split('-') for x in param_list]
+    print(params)
+    param_1_list = np.array(params)[:,0].astype(np.float32)
+    param_2_list = np.array(params)[:,1].astype(np.int)
+    param_1_list.sort()
+    param_2_list.sort()
+    param_1_list = np.unique(param_1_list)
+    param_2_list = np.unique(param_2_list)
+    print(param_1_list)
+    print(param_2_list)
+    bound_1 = np.shape(param_1_list)[0]
+    bound_2 = np.shape(param_2_list)[0]
+    ss_mat = np.ones((bound_1, bound_2))
+    ms_mat = np.ones((bound_1, bound_2))
+    for i, param_1 in enumerate(param_1_list):
+        for j, param_2 in enumerate(param_2_list):
+            ss_acc, ms_acc, _, _ = read_statistics(os.path.join(args.folder,str(param_1)+'-'+str(param_2)))
+            ss_mat[i,j] = ss_acc
+            ms_mat[i,j] = ms_acc
+    # SingleStep Accuracy Map
+    plt.imshow(ss_mat,cmap='jet',origin='lower')
+    plt.colorbar()
+    plt.title('SingleStep RMSE for different Tau/K-iter values')
+    plt.ylabel('Tau')
+    plt.xlabel('K-iter')
+    plt.yticks(list(range(bound_1)),param_1_list)
+    plt.xticks(list(range(bound_2)),param_2_list)
+    plt.xticks(rotation=45)
+    plt.savefig(os.path.join(args.output,'ss_grid_search_image.png'))
     plt.cla()
     plt.clf()
     plt.close()
-    # SingleStep Accuracy Histogram
-    y1 = ms_mat - mss_mat
-    y2 = ms_mat + mss_mat
-    plt.plot(params, y1, params, y2, color='orange')
-    plt.fill_between(params, y1, y2, where=y2 >= y1, facecolor='orange', alpha=0.5, interpolate=True, label='std_dev')
-    plt.plot(params, ms_mat, color='C0', label='average')
-    plt.title('History MS: '+args.folder.split('/')[-1])
-    plt.xlabel('history length')
-    plt.ylabel('RMSE')
-    plt.legend()
-    plt.savefig(os.path.join(args.output,'ms_grid_search_plot.png'))
+    # MultiStep Accuracy Map
+    plt.imshow(ms_mat,cmap='jet',origin='lower')
+    plt.colorbar()
+    plt.title('MultiStep RMSE for different Tau/K-iter values')
+    plt.ylabel('Tau')
+    plt.xlabel('K-iter')
+    plt.yticks(list(range(bound_1)),param_1_list)
+    plt.xticks(list(range(bound_2)),param_2_list)
+    plt.savefig(os.path.join(args.output,'ms_grid_search_image.png'))
 
 args = parse_args()
 get_statistics(args)

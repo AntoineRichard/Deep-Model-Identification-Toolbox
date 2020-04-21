@@ -2,6 +2,46 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers as Layers
 
+def get_activation(name):
+    """
+    Parses a string to extract the activation function.
+    """
+    string = name.split(':')
+
+    if string[0] == 'RELU':
+        activation = Layers.ReLU()
+    elif string[0] == 'TANH':
+        activation = Layers.Activation(tf.keras.activations.tanh)
+    elif string[0] == 'SIGMOID':
+        activation = Layers.Activation(tf.keras.activations.sigmoid)
+    elif string[0] == 'LRELU':
+        try:
+            activation = Layers.LeakyReLU(float(string[1]))
+        except:
+            warnings.warn('Using default alpha parameter : 0.1.', SyntaxWarning)
+            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
+            activation = Layers.LeakyReLU(0.1)
+    elif string[0] == 'PRELU':
+        activation = Layers.PReLU()
+    elif string[0] == 'ELU':
+        try:
+            activation = Layers.ELU(float(string[1]))
+        except:
+            warnings.warn('Using default alpha parameter : 1.0.', SyntaxWarning)
+            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
+            activation = Layers.ELU(1.0)
+    elif string[0] == 'SELU':
+        activation = Layers.Activation(tf.keras.activations.selu)
+    elif string[0] == 'SWISH':
+        activation = swish()
+    elif string[0] == 'CSWISH':
+        activation = Layers.Activation(cswish)
+    elif string[0] == 'MISH':
+        activation = Layers.Activation(mish)
+    else:
+        raise ValueError('error: unknown activation function')
+    return activation
+
 def accuracy(est, gt):
     with tf.name_scope('accuracy_op'):
         diff = tf.square(tf.subtract(est, gt))
@@ -15,28 +55,27 @@ def train_fn(loss, learning_rate):
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
     return train_step
 
-class SWISH1(Layers.Layer):
+def cswish(inputs):
+    return tf.math.multiply(inputs, tf.nn.sigmoid(inputs))
+
+class swish(Layers.Layer):
     def __init__(self):
-        super(SWISH1, self).__init__()
-        self.beta = tf.constant(1.0, dtype='float32')
+        super(swish, self).__init__()
+        self.beta = tf.Variable(1.0, trainable=True)
 
     def call(self, inputs):
+        tf.summary.scalar('swish_value', self.beta)
         return tf.math.multiply(inputs,tf.math.multiply(self.beta, tf.nn.sigmoid(inputs)))
 
-class SWISH(Layers.Layer):
-    def __init__(self):
-        super(SWISH, self).__init__()
-        self.beta = tf.Variable(tf.random_normal_initializer(shape=(0)),dtype='float32')
-
-    def call(self, inputs):
-        return tf.math.multiply(inputs,tf.math.multiply(self.beta, tf.nn.sigmoid(inputs)))
+def mish(inputs):
+    return tf.math.multiply(inputs,tf.nn.tanh(tf.nn.softplus(inputs)))
 
 
 class GraphATTNSP:
     """
     Attention Based Network
     """
-    def __init__(self, settings, model_depth, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, model_depth, layers, params, act='RELU'):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
@@ -54,16 +93,16 @@ class GraphATTNSP:
         self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
         # Attention Projection
         with tf.name_scope('qkv_projection'):
-            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='q_projection'))(self.pcoded)
-            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='k_projection'))(self.pcoded)
-            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='v_projection'))(self.pcoded)
+            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='q_projection'))(self.pcoded)
+            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='k_projection'))(self.pcoded)
+            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='v_projection'))(self.pcoded)
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask, name='full_attn')
         # FeedForward
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
                 self.xc = Layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
         self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
@@ -111,7 +150,7 @@ class GraphATTNMP(GraphATTNSP):
     """
     Seq2Seq Attention based network
     """
-    def __init__(self, settings, alpha, model_depth, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, alpha, model_depth, layers, params, act='RELU'):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
@@ -127,16 +166,16 @@ class GraphATTNMP(GraphATTNSP):
         self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
         # Attention Projection
         with tf.name_scope('qkv_projection'):
-            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='q_projection'))(self.pcoded)
-            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='k_projection'))(self.pcoded)
-            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='v_projection'))(self.pcoded)
+            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='q_projection'))(self.pcoded)
+            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='k_projection'))(self.pcoded)
+            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='v_projection'))(self.pcoded)
         # Attention mechanism
         self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask, name='full_attn')
         # FeedForward
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
                 self.xc = Layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
         self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
@@ -163,7 +202,7 @@ class GraphATTNMPMH(GraphATTNSP):
     """
     Multi-Head Seq2Seq Attention based network
     """
-    def __init__(self, settings, alpha, model_depth, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, alpha, model_depth, layers, params, act='RELU'):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
@@ -183,13 +222,13 @@ class GraphATTNMPMH(GraphATTNSP):
         self.pcoded_cmd = self.positional_encoding(self.embbed_cmd, model_depth, settings.sequence_length, name='cmd_positional_embedding')
         # Attention Projection
         with tf.name_scope('state_qkv_projection'):
-            self.SQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='state_q_projection'))(self.pcoded_state)
-            self.SKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='state_k_projection'))(self.pcoded_state)
-            self.SVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='state_v_projection'))(self.pcoded_state)
+            self.SQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_q_projection'))(self.pcoded_state)
+            self.SKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_k_projection'))(self.pcoded_state)
+            self.SVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_v_projection'))(self.pcoded_state)
         with tf.name_scope('cmd_qkv_projection'):
-            self.CQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='cmd_q_projection'))(self.pcoded_cmd)
-            self.CKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='cmd_k_projection'))(self.pcoded_cmd)
-            self.CVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=act, name='cmd_v_projection'))(self.pcoded_cmd)
+            self.CQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_q_projection'))(self.pcoded_cmd)
+            self.CKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_k_projection'))(self.pcoded_cmd)
+            self.CVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_v_projection'))(self.pcoded_cmd)
         # Attention mechanism
         self.state_attn = self.attention(self.SQW, self.SKW, self.SVW, float(model_depth), mask, name='state_attn')
         self.p_attn_state = self.p_attn
@@ -200,7 +239,7 @@ class GraphATTNMPMH(GraphATTNSP):
         self.xc = self.concat
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=act, name='dense_'+str(i)))(self.xc)
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
                 self.xc = Layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
         self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
@@ -227,7 +266,7 @@ class GraphMLP:
     """
     MLP.
     """
-    def __init__(self, settings, layers, params, act=Layers.ReLU()):
+    def __init__(self, settings, layers, params, act='RELU'):
        
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
@@ -244,7 +283,7 @@ class GraphMLP:
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = Layers.Dense(params[i], activation=act, name='dense_'+str(i))(self.xc)
+                self.xc = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.xc)
             if layer_type == 'dropout':
                 self.xc = Layers.Dropout(1-self.keep_prob, name='drop_'+str(i))(self.xc, training=self.is_training)
         self.y_ = Layers.Dense(settings.output_dim, activation=None, name='outputs')(self.xc)
@@ -334,7 +373,7 @@ class GraphCNN:
     """
     CNN.
     """
-    def __init__(self, settings, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, layers, params, act='RELU'):
 
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
@@ -351,14 +390,14 @@ class GraphCNN:
         self.xc = self.x
         for i, layer_type in enumerate(layers):
             if layer_type == 'conv':
-                self.xc = tf.layers.Conv1D(params[i][0], params[i][1], padding='same', activation=act, name='conv1D_'+str(i))(self.xc)
+                self.xc = tf.layers.Conv1D(params[i][0], params[i][1], padding='same', activation=get_activation(act), name='conv1D_'+str(i))(self.xc)
             if layer_type == 'pool':
                 self.xc = Layers.MaxPool1D(params[i], params[i], padding='same', name='max_pool1D_'+str(i))(self.xc)
             if layer_type == 'dense':
                 if must_reshape:
                     self.xc = Layers.Flatten(name='flatten')(self.xc)
                     must_reshape = False
-                self.xc = Layers.Dense(params[i], activation=act, name='dense_'+str(i))(self.xc)
+                self.xc = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.xc)
             if layer_type == 'dropout':
                 self.xc = tf.layers.dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
         self.y_ = Layers.Dense(settings.output_dim, activation=None, name='outputs')(self.xc)
@@ -381,7 +420,7 @@ class GraphRNN:
     """
     RNN.
     """
-    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act='RELU'):
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
@@ -419,7 +458,7 @@ class GraphRNN:
         self.xc = self.tensor_state
         for i, layer in enumerate(layer_type):
             if layer == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = tf.layers.dense(self.xc, params[i], activation=get_activation(act), name='dense_'+str(i))
             if layer == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
         self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
@@ -444,7 +483,7 @@ class GraphGRU:
     """
     GRU.
     """
-    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act='RELU'):
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
@@ -482,7 +521,7 @@ class GraphGRU:
         self.xc = self.tensor_state
         for i, layer in enumerate(layer_type):
             if layer == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = tf.layers.dense(self.xc, params[i], activation=get_activation(act), name='dense_'+str(i))
             if layer == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
         self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
@@ -507,7 +546,7 @@ class GraphLSTM:
     """
     LSTM.
     """
-    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act='RELU'):
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
@@ -548,7 +587,7 @@ class GraphLSTM:
         self.xc = self.tensor_state
         for i, layer in enumerate(layer_type):
             if layer == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = tf.layers.dense(self.xc, params[i], activation=get_activation(act), name='dense_'+str(i))
             if layer == 'dropout':
                 self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
         self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
