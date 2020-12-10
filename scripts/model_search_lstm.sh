@@ -1,8 +1,8 @@
 # MODEL SEARCH
-network_list=$(cat "/cs-share/dream/systemid_v2/scripts/network_list/LSTM_networks_LRELU.txt")
+network_list="/cs-share/dream/systemid_v2/scripts/network_list/LSTM_networks_LRELU.txt"
 
 # VALIDATION PARAMETERS
-run_max=3
+run_max=2
 
 # TRAINING PARAMETERS
 iterations=10000
@@ -31,11 +31,11 @@ tb_suffix="$output_root/tensorboard/GS/LSTM_full_random"
 # INIT
 mkdir -p ${output_root}
 
-for model in ${netwotk_list}
+while IFS= read -r model        
 do
 	for run in $(seq 0 $run_max)
 	do
 		mkdir -p ${save_suffix}/${model}/r${run}
 		echo python3 ${python_script} --train_data ${training_set} --val_data ${validation_set} --test_data ${test_set} --batch_size ${batch_size} --val_batch_size ${batch_val_size} --test_batch_size ${batch_test_size} --input_dim 5 --output_dim 3 --dropout ${drop_rate} --model ${model} --learning_rate ${learning_rate} --timestamp_idx 0 --output ${save_suffix}/${model}/r${run} --tb_dir ${tb_suffix} --tb_log_name ${model}-r${run} --reader_mode seq2seq --trajectory_length=${traj_length} --max_iterations ${iterations} >> ${to_file}
 	done
-done
+done < "$network_list"

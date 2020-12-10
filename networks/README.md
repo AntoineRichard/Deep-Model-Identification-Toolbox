@@ -1,36 +1,6 @@
-# Deep ID : a simple deep-learning based identification toolbox
+# The Framework
 
-Deep ID features all of the most common, and state of the art architectures for deep system identification.
-It comes with a command line model generator, for MLPs, 1D CNNs, RNNs, LSTMs, GRUs and Attention based models.
-Additionnaly this toolbox provide support for advanced data handling such as continuous-time seq2seq.
-Finally, Deep ID implements the most common tools for proper model evaluation such has k-fold Cross Validation,
-singlestep and multistep error evaluation along with a TensorBoard backend for visualization. 
-With over 35 parameters available from command line Deep ID is extremely flexible making grid searches for optimal
-parameters easy and efficient. More about Deep ID below.
-
-## Using DeepID
-
-This section covers how to use the DeepID toolbox.
-
-### Prerequisite
-
-To run DeepID you need:
-- TensorFlow v1.14.0 (and the associated CUDA/CUDNN requirements)
-- Scikit-Learn
-- Numpy
-- Python3 **(REQUIRED FOR TRAINING ONLY)**
-
-This Framework was sucessfully tested on the
-following system architectures PPC64, AARCH64 and x64. 
-
-### Running DeepID
-To run DeepID issue the following command:
-
- - ``python3 rules.py ''A list of arguments''``
-
-To learn more about the available arguments please refere to the Settings section.
-
-## The Framework
+## Overview
 
 This section covers the different element of the framework and how they interact. As of now the framework
 is articulated around 6 blocks:
@@ -124,7 +94,7 @@ Please leave this setting to one.
 This section covers the available models and how to invoke them from the command line argument.
 
 ### Available Models
-- MLPs
+- MLPs (and variation around state systems)
 - Complex valued MLPs
 - 1D CNNs
 - Attention Networks
@@ -137,17 +107,24 @@ This section covers the available models and how to invoke them from the command
  attention based LSTMs/GRUs.
 
 ### Available Activation Function
-- ReLu
-- Leaky ReLu
+- ReLU
+- Leaky ReLU 
+- Parametric ReLU (P-ReLU)
+- Exponential Linear Unit (ELU)
+- Scaled ELU (SELU)
+- SWISH
+- CSWISH (constant version of SWISH)
+- MISH
 - Tanh
 - Sigmoid
 
-> Future plans include parametric ReLus and Exponential ReLus.
-
 ### MLP Models
 For the MLP the command line generator support 2 layers:
-- Dense layer : 'd'
-- Dropout layer : 'r'
+- Dense layer : 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layer : 'r', the keeprate, is defined when starting
+                      the training.
 
 To generate a model the user has to use the --model argument and add a string after it.
 Each word that are going to compose this string have to be separated by an underscore.
@@ -162,12 +139,22 @@ In the end you can specify a MLP model as follows:
 - --model MLP\_TANH\_r\_d16
 - --model MLP\_LRELU\_d64\_r\_d128\_r\_d16
 
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
 > Future plans include batch normalization.
 
-### MLP Models
-For the MLP the command line generator support 2 layers:
-- Dense layer : 'd'
-- Dropout layer : 'r'
+### PHYSICAL MLP Models
+These models optimise a linear model and a non-linear function such that: 
+X_{t+1} = A*X_t + B*U_t + F(X_{t..t-n}, U_{t..t-n})
+Where A and B or optimized to minimize the error between the prediction
+ and the real value, and F is optimized to minimize the prediction error
+ of the linear model.
+
+For the Physical MLP the command line generator support 2 layers:
+- Dense layer : 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layer : 'r', the keeprate, is defined when starting
+                      the training.
 
 To generate a model the user has to use the --model argument and add a string after it.
 Each word that are going to compose this string have to be separated by an underscore.
@@ -176,30 +163,159 @@ activation funtion that are going to be used in the model. Then the user must sp
 layers he wants to use in a sequential order.
 
 
-In the end you can specify a MLP model as follows:
+In the end you can specify a Physical MLP model as follows:
 
-- --model MLP\_RELU\_d32\_d32
-- --model MLP\_TANH\_r\_d16
-- --model MLP\_LRELU\_d64\_r\_d128\_r\_d16
+- --model MLPPHY\_RELU\_d32\_d32
+- --model MLPPHY\_TANH\_r\_d16
+- --model MLPPHY\_LRELU\_d64\_r\_d128\_r\_d16
 
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
 > Future plans include batch normalization.
 
-### MLP Models
-For the MLP the command line generator support 2 layers:
-- Dense layer : 'd'
-- Dropout layer : 'r'
+### Complex MLP Models
+For the Complex value MLP the command line generator support 2 layers:
+- Dense layer : 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layer : 'r', the keeprate, is defined when starting
+                      the training.
 
 To generate a model the user has to use the --model argument and add a string after it.
 Each word that are going to compose this string have to be separated by an underscore.
-The first word defines the model type, in our case: MLP. The second defines the type of
+The first word defines the model type, in our case: a CPLXMLP. The second defines the type of
 activation funtion that are going to be used in the model. Then the user must specify the 
 layers he wants to use in a sequential order.
 
 
-In the end you can specify a MLP model as follows:
+In the end you can specify a Complex valued MLP model as follows:
 
-- --model MLP\_RELU\_d32\_d32
-- --model MLP\_TANH\_r\_d16
-- --model MLP\_LRELU\_d64\_r\_d128\_r\_d16
+- --model CPLXMLP\_RELU\_d32\_d32
+- --model CPLXMLP\_TANH\_r\_d16
+- --model CPLXMLP\_LRELU\_d64\_r\_d128\_r\_d16
 
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
 > Future plans include batch normalization.
+
+### 1D CNN Models
+For the 1D CNNs the command line generator support 4 layers:
+- Convolution layers: 'k' followed by a number, followed by 'c',
+                          followed by another number: k3c64 is a 
+                          convolution of kernel size 3 with a depth
+                          of 64. 
+- Pooling layers: 'p' followed by a number: p2 is a pooling layer with
+                      a kernel size of 2, with stride 2.
+- Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layers: 'r', the keeprate, is defined when starting
+                      the training.
+
+To generate a model the user has to use the --model argument and add a string after it.
+Each word that are going to compose this string have to be separated by an underscore.
+The first word defines the model type, in our case: CNN. The second defines the type of
+activation funtion that are going to be used in the model. Then the user must specify the 
+layers he wants to use in a sequential order.
+
+
+In the end you can specify a CNN model as follows:
+
+- --model CNN\_RELU\_k3c64\_p2\_d32
+- --model CNN\_TANH\_k5c32\_p2\_k3c128\_r\_d16
+- --model CNN\_LRELU\_k5c64\_r\_d128\_r\_d16
+
+> Please note that when using a dense layer for the first time the output of the feature extractor is automically flatenned. Hence one cannot do: --model CNN\_TANH\_k3c32\_d16\_k3c32. Also one must specify at least one dense layer after the feature extractor. Hence one cannot do: --model CNN\_TANH\_k3c32.
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
+> Future plans include batch normalization, and Fully Convolutional support.
+
+### RNN Models
+For the RNNs the command line generator support 2 layers:
+- Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layers: 'r', the keeprate, is defined when starting
+                      the training.
+Additionnaly the command line generator must be provided with 2 parameters:
+- Hidden State Size: 'hs' followed by a number: hs32 means a
+                         hidden state of size 32, use this parameter
+                         only once. If set multipletime then the
+                         parser will select the lastest.
+- Recurrent layers: 'l' followed by a number: l3 means that 3 
+                        recurrent layers are being stacked ontop
+                        of each other.
+    
+To generate a model the user has to use the --model argument and add a string after it.
+Each word that are going to compose this string have to be separated by an underscore.
+The first word defines the model type, in our case: RNN. The second defines the type of
+activation funtion that are going to be used in the model. Then the user must specify the 
+layers he wants to use in a sequential order.
+
+RNN being a reccurent architecture, the framework allows for specific options. More specifically, the RNN has been ``rolled'' in two steps. A first step rolls the first element of the sequence when the second step rolls the rest. This is practical if one uses continuous-time RNN has it allows to save the future next hidden-state.
+  
+In the end you can specify a RNN model as follows:
+- --model RNN\_LRELU\_hs32\_l1\_d16\_d16
+- --model RNN\_TANH\_hs128\_l3\_d32 
+- --model RNN\_RELU\_hs64\_l2\_d64\_r\_d32
+
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
+
+### GRU Models
+For the GRUs the command line generator support 2 layers:
+- Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layers: 'r', the keeprate, is defined when starting
+                      the training.
+Additionnaly the command line generator must be provided with 2 parameters:
+- Hidden State Size: 'hs' followed by a number: hs32 means a
+                         hidden state of size 32, use this parameter
+                         only once. If set multipletime then the
+                         parser will select the lastest.
+- Recurrent layers: 'l' followed by a number: l3 means that 3 
+                        recurrent layers are being stacked ontop
+                        of each other.
+    
+To generate a model the user has to use the --model argument and add a string after it.
+Each word that are going to compose this string have to be separated by an underscore.
+The first word defines the model type, in our case: GRU. The second defines the type of
+activation funtion that are going to be used in the model. Then the user must specify the 
+layers he wants to use in a sequential order.
+
+GRU being a reccurent architecture, the framework allows for specific options. More specifically, the GRU has been ``rolled'' in two steps. A first step rolls the first element of the sequence when the second step rolls the rest. This is practical if one uses continuous-time GRU has it allows to save the future next hidden-state.
+  
+In the end you can specify a GRU model as follows:
+- --model GRU\_LRELU\_hs32\_l1\_d16\_d16
+- --model GRU\_TANH\_hs128\_l3\_d32 
+- --model GRU\_RELU\_hs64\_l2\_d64\_r\_d32
+
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.
+
+### LSTM Models
+For the LSTMs the command line generator support 2 layers:
+- Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+- Dropout layers: 'r', the keeprate, is defined when starting
+                      the training.
+Additionnaly the command line generator must be provided with 2 parameters:
+- Hidden State Size: 'hs' followed by a number: hs32 means a
+                         hidden state of size 32, use this parameter
+                         only once. If set multipletime then the
+                         parser will select the lastest.
+- Recurrent layers: 'l' followed by a number: l3 means that 3 
+                        recurrent layers are being stacked ontop
+                        of each other.
+    
+To generate a model the user has to use the --model argument and add a string after it.
+Each word that are going to compose this string have to be separated by an underscore.
+The first word defines the model type, in our case: LSTM. The second defines the type of
+activation funtion that are going to be used in the model. Then the user must specify the 
+layers he wants to use in a sequential order.
+
+LSTM being a reccurent architecture, the framework allows for specific options. More specifically, the LSTM has been ``rolled'' in two steps. A first step rolls the first element of the sequence when the second step rolls the rest. This is practical if one uses continuous-time LSTM has it allows to save the future next hidden-state.
+  
+In the end you can specify a LSTM model as follows:
+- --model LSTM_LRELU_hs32_l1_d16_d16
+- --model LSTM_TANH_hs128_l3_d32 
+- --model LSTM_RELU_hs64_l2_d64_r_d32
+
+> The model **automatically casts to the right number of output** using the --output\_dim argument provided by the user.

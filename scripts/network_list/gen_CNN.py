@@ -46,7 +46,7 @@ for ker in KERNELS:
                         tmp = tmp+'_k'+str(ker)+'c'+str(c_comb[idx])
                         idx += 1
                     else:
-                        tmp = tmp +'_p'
+                        tmp = tmp +'_p2'
                 conv_layers.append(tmp)
 
 dense_layers = []

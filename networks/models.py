@@ -1,56 +1,184 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras import layers as Layers
 
+def get_activation(name):
+    """
+    Parses a string to extract the activation function.
+    """
+    string = name.split(':')
+
+    if string[0] == 'RELU':
+        activation = Layers.ReLU()
+    elif string[0] == 'TANH':
+        activation = Layers.Activation(tf.keras.activations.tanh)
+    elif string[0] == 'SIGMOID':
+        activation = Layers.Activation(tf.keras.activations.sigmoid)
+    elif string[0] == 'LRELU':
+        try:
+            activation = Layers.LeakyReLU(float(string[1]))
+        except:
+            warnings.warn('Using default alpha parameter : 0.1.', SyntaxWarning)
+            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
+            activation = Layers.LeakyReLU(0.1)
+    elif string[0] == 'PRELU':
+        activation = Layers.PReLU()
+    elif string[0] == 'ELU':
+        try:
+            activation = Layers.ELU(float(string[1]))
+        except:
+            warnings.warn('Using default alpha parameter : 1.0.', SyntaxWarning)
+            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
+            activation = Layers.ELU(1.0)
+    elif string[0] == 'SELU':
+        activation = Layers.Activation(tf.keras.activations.selu)
+    elif string[0] == 'SWISH':
+        activation = swish()
+    elif string[0] == 'CSWISH':
+        activation = Layers.Activation(cswish)
+    elif string[0] == 'MISH':
+        activation = Layers.Activation(mish)
+    else:
+        raise ValueError('error: unknown activation function. Currently supported activation functions are RELU, PRELU, LRELU, SELU, ELU, TANH, SIGMOIG, SWISH, CSWISH (constan version of swish), MISH.')
+    return activation
+
+def apply_optimizer(opt, learning_rate, loss):
+    """
+    Get the optimizer selected by the user
+    """
+    opt = opt.lower()
+    if opt == 'adam':
+        return tf.train.AdamOptimizer(learning_rate).minimize(loss)
+    elif opt = 'sgd':
+        return tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
+    elif opt = 'momentum':
+        return tf.train.MomentumOptimizer(learning_rate).minimize(loss)
+    elif opt = 'adagrad'
+        return tf.train.AdagradOptimizer(learning_rate).minimize(loss)
+    elif opt = 'rmsprop'
+        return tf.train.RMSPropOptimizer(learning_rate).minimize(loss)
+    else:
+        raise ValueError('error: unknown optimizer. Currently supported optimizers are: adam, sgd, momentum, adagrad, rmsprop.')
+
+def apply_decay(step, learning_rate, settings):
+    """
+    Applies decay is selected by user
+    """
+    mode = settings.decay_mode.lower()
+    if mode == 'none':
+        return learning_rate
+    elif mode == 'exponential':
+        return tf.train.exponential_decay(learning_rate, step, settings.decay_steps, settings.decay_rate)
+    elif mode == 'polynomial':
+        return tf.train.polynomial_decay(learning_rate, step, settings.decay_steps, settings.end_learning_rate, settings.decay_power)
+    elif mode == 'inversetime':
+        return tf.train.inverse_time_decay(learning_rate, step, settings.decay_steps, settings.decay_rate)
+    elif mode == 'naturalexp':
+        return tf.train.natural_exp_decay(learning_rate, step, settings.decay_steps, settings.decay_rate)
+    elif mode == 'piecewiseconstant':
+        return tf.train.piecewise_constant_decay(step, settings.decay_boundaries, settings.decay_values)
+    elif mode == 'gamma':
+        return learning_rate * tf.pow(settings.decay_rate, tf.floor(step/settings.decay_steps))
+    else:
+        raise ValueError('error: unknown decay type. Currently supported types are: none, exponential, polynomial, inversetime, naturalexp, piecewiseconstant, gamma.') 
+    
 def accuracy(est, gt):
     with tf.name_scope('accuracy_op'):
-        diff = tf.sqrt(tf.square(tf.subtract(est, gt)))
-        accuracy = tf.reduce_mean(tf.cast(diff, tf.float32),axis = 0)
-        std_dev = tf.math.reduce_std(tf.cast(diff, tf.float32), axis = 0)
+        diff = tf.square(tf.subtract(est, gt))
+        accuracy = tf.sqrt(tf.reduce_mean(tf.cast(diff, tf.float32),axis = 0))
         tf.summary.scalar('accuracy', tf.reduce_mean(accuracy))
-        tf.summary.scalar('std_dev', tf.reduce_mean(std_dev))
-    return accuracy, std_dev
+    return accuracy
 
-def train_fn(loss, learning_rate):
+def train_fn(loss, learning_rate, step, settings):
     with tf.name_scope('train'):
+        learning_rate = apply_decay(step, learning_rate, settings)
         tf.summary.scalar('learning_rate', learning_rate)
-        train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+        train_step = apply_optimizer(settings.optimizer, learning_rate, loss)
     return train_step
+
+def cswish(inputs):
+    return tf.math.multiply(inputs, tf.nn.sigmoid(inputs))
+
+class swish(Layers.Layer):
+    def __init__(self):
+        super(swish, self).__init__()
+        self.beta = tf.Variable(1.0, trainable=True)
+
+    def call(self, inputs):
+        tf.summary.scalar('swish_value', self.beta)
+        return tf.math.multiply(inputs,tf.math.multiply(self.beta, tf.nn.sigmoid(inputs)))
+
+def mish(inputs):
+    return tf.math.multiply(inputs,tf.nn.tanh(tf.nn.softplus(inputs)))
+'''
+def evonorm_s0(x, gamma, beta, nonlinearity):
+    if nonlinearity:
+        v = trainable_variable_ones(shape=gamma.shape)
+        num = x * tf.nn.sigmoid(v * x)
+        return num / group_std(x) * gamma + beta
+    else:
+        return x * gamma + beta
+
+def evonorm_b0(x, gamma, beta, nonlinearity, training):
+    if nonlinearity:
+        v = trainable variable ones(shape=gamma.shape)
+        batch_std = batch_mean_and_std(x, training)
+        den = tf.maximum(batch_std, v * x + instance_std(x))
+        return x / den * gamma + beta
+    else:
+        return x * gamma + beta
+
+def instance_std(x, eps=1e−5):
+    var = tf.nn.moments(x, axes=[1, 2], keepdims=True)
+    return tf.sqrt(var + eps)
+
+def group_std(x, groups=32, eps=1e−5):
+    N, SS, IS = x.shape
+    x = tf.reshape(x, [N, SS, groups, IS // groups])
+    var = tf.nn.moments(x, [1, 2, 4], keepdims=True)
+    std = tf.sqrt(var + eps)
+    std = tf.broadcast_to(std, x.shape)
+    return tf.reshape(std, [N, SS, IS])
+
+def trainable_variable_ones(shape, name="v"):
+   return tf.get_variable(name, shape=shape,initializer=tf.ones_initializer())
+'''
 
 class GraphATTNSP:
     """
     Attention Based Network
     """
-    def __init__(self, settings, model_depth, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, model_depth, layers, params, act='RELU'):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
         # Reshape
         mask = self.make_causal_mask(settings.sequence_length)
         tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
         # Embedding
-        self.embbed = tf.layers.dense(self.x, model_depth, use_bias=False, activation=None)
+        self.embbed = Layers.TimeDistributed(Layers.Dense( model_depth, use_bias=False, activation=None))(self.x)
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
         # Attention Projection
         with tf.name_scope('qkv_projection'):
-            self.QW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='q_projection')
-            self.KW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='k_projection')
-            self.VW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='v_projection')
+            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='q_projection'))(self.pcoded)
+            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='k_projection'))(self.pcoded)
+            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='v_projection'))(self.pcoded)
         # Attention mechanism
-        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask)
+        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask, name='full_attn')
         # FeedForward
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
+                self.xc = Layers.Dropout(self.drop_rate, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -61,23 +189,23 @@ class GraphATTNSP:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
 
     def make_causal_mask(self, size):
         with tf.name_scope('causal_mask'):
-            #return 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
-            return tf.cast(np.tril(np.ones((1,size,size)),k=0),dtype=tf.float32)#+np.triu(np.ones((1,size,size)),k=1)*1e-9,dtype=tf.float32)
+            return tf.linalg.band_part(tf.ones((1,size, size)), -1, 0)
+            #return tf.cast(np.tril(np.ones((1,size,size)),k=0),dtype=tf.float32)
 
 
     def attention(self, query, key, value, d_k, mask, name='attention'):
         with tf.variable_scope(name):
             with tf.name_scope('attention_weights'):
-                #tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
                 scores = tf.divide(tf.matmul(query, tf.transpose(key, perm=[0, 2, 1])),tf.math.sqrt(d_k))
-                masked_scores = tf.multiply(mask, scores)
+                #masked_scores = tf.multiply(mask, scores)
+                masked_scores = tf.multiply(scores, mask) - (1-mask)*1e9
                 self.p_attn = tf.nn.softmax(masked_scores, axis = -1)
                 tf.summary.image('attn_weights', tf.expand_dims(self.p_attn,-1))
             return tf.matmul(self.p_attn, value)
@@ -95,35 +223,35 @@ class GraphATTNMP(GraphATTNSP):
     """
     Seq2Seq Attention based network
     """
-    def __init__(self, settings, alpha, model_depth, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, alpha, model_depth, layers, params, act='RELU'):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
         # Reshape
         mask = self.make_causal_mask(settings.sequence_length)
         # Embedding
-        self.embbed = tf.layers.dense(self.x, model_depth, use_bias=False, activation=None)
+        self.embbed = Layers.TimeDistributed(Layers.Dense( model_depth, use_bias=False, activation=None))(self.x)
         # Positional Embedding
         self.pcoded = self.positional_encoding(self.embbed, model_depth, settings.sequence_length)
         # Attention Projection
         with tf.name_scope('qkv_projection'):
-            self.QW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='q_projection')
-            self.KW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='k_projection')
-            self.VW = tf.layers.dense(self.pcoded, model_depth, activation=act, name='v_projection')
+            self.QW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='q_projection'))(self.pcoded)
+            self.KW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='k_projection'))(self.pcoded)
+            self.VW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='v_projection'))(self.pcoded)
         # Attention mechanism
-        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask)
+        self.xr = self.attention(self.QW, self.KW, self.VW, float(model_depth), mask, name='full_attn')
         # FeedForward
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
+                self.xc = Layers.Dropout(self.drop_rate, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -138,7 +266,7 @@ class GraphATTNMP(GraphATTNSP):
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.y[:,-1,:])
+        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -147,53 +275,47 @@ class GraphATTNMPMH(GraphATTNSP):
     """
     Multi-Head Seq2Seq Attention based network
     """
-    def __init__(self, settings, alpha, model_depth, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, alpha, model_depth, layers, params, act='RELU'):
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
         # Reshape
         state = self.x[:,:,:settings.input_dim]
         cmd = self.x[:,:,-settings.cmd_dim:]
         mask = self.make_causal_mask(settings.sequence_length)
-        #print(mask.shape)
-        #tf.summary.image('causal_mask', tf.expand_dims(mask,-1))
         # Embedding
-        self.embbed_state = tf.layers.dense(state, model_depth, use_bias=False, activation=None, name='state_embedding')
-        self.embbed_cmd = tf.layers.dense(cmd, model_depth, use_bias=False, activation=None, name='cmd_embedding')
+        self.embbed_state = tf.keras.layers.TimeDistributed(Layers.Dense(model_depth, use_bias=False, activation=None, name='state_embedding'))(state)
+        self.embbed_cmd = tf.keras.layers.TimeDistributed(Layers.Dense(model_depth, use_bias=False, activation=None, name='cmd_embedding'))(cmd)
         # Positional Embedding
         self.pcoded_state = self.positional_encoding(self.embbed_state, model_depth, settings.sequence_length, name='state_positional_embedding')
         self.pcoded_cmd = self.positional_encoding(self.embbed_cmd, model_depth, settings.sequence_length, name='cmd_positional_embedding')
         # Attention Projection
         with tf.name_scope('state_qkv_projection'):
-            self.SQW = tf.layers.dense(self.pcoded_state, model_depth, activation=act, name='state_q_projection')
-            self.SKW = tf.layers.dense(self.pcoded_state, model_depth, activation=act, name='state_k_projection')
-            self.SVW = tf.layers.dense(self.pcoded_state, model_depth, activation=act, name='state_v_projection')
+            self.SQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_q_projection'))(self.pcoded_state)
+            self.SKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_k_projection'))(self.pcoded_state)
+            self.SVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_v_projection'))(self.pcoded_state)
         with tf.name_scope('cmd_qkv_projection'):
-            self.CQW = tf.layers.dense(self.pcoded_cmd, model_depth, activation=act, name='cmd_q_projection')
-            self.CKW = tf.layers.dense(self.pcoded_cmd, model_depth, activation=act, name='cmd_k_projection')
-            self.CVW = tf.layers.dense(self.pcoded_cmd, model_depth, activation=act, name='cmd_v_projection')
+            self.CQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_q_projection'))(self.pcoded_cmd)
+            self.CKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_k_projection'))(self.pcoded_cmd)
+            self.CVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_v_projection'))(self.pcoded_cmd)
         # Attention mechanism
         self.state_attn = self.attention(self.SQW, self.SKW, self.SVW, float(model_depth), mask, name='state_attn')
+        self.p_attn_state = self.p_attn
         self.cmd_attn = self.attention(self.CQW, self.CKW, self.CVW, float(model_depth), mask, name='cmd_attn')
+        self.p_attn_cmd = self.p_attn
         self.concat = tf.concat([self.state_attn, self.cmd_attn], axis=-1)
-        #self.pcoded_fusion = self.positional_encoding(self.concat, model_depth*2, settings.sequence_length, name='fusion_positional_embedding')
-        #with tf.name_scope('fuse_qkv_projection'):
-        #    self.FQW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_q_projection')
-        #    self.FKW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_k_projection')
-        #    self.FVW = tf.layers.dense(self.pcoded_fusion, model_depth, activation=act, name='fuse_v_projection')
-        #self.xr = self.attention(self.FQW, self.FKW, self.FVW, float(model_depth), mask, name='fused_attn')
         # FeedForward
         self.xc = self.concat
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i)))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.ys_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output_full_dim')
+                self.xc = Layers.Dropout(self.drop_rate, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.ys_ = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
         self.y_ = self.ys_[:,-1,:]
         # Loss
         with tf.name_scope('loss_ops'):
@@ -208,7 +330,77 @@ class GraphATTNMPMH(GraphATTNSP):
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.y[:,-1,:])
+        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
+
+class GraphATTNMPMH_PHY(GraphATTNSP):
+    """
+    Multi-Head Seq2Seq Attention based network
+    """
+    def __init__(self, settings, alpha, model_depth, layers, params, act='RELU'):
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+        # Reshape
+        state = self.x[:,:,:settings.input_dim]
+        cmd = self.x[:,:,-settings.cmd_dim:]
+        mask = self.make_causal_mask(settings.sequence_length)
+        # Embedding
+        self.embbed_state = tf.keras.layers.TimeDistributed(Layers.Dense(model_depth, use_bias=False, activation=None, name='state_embedding'))(state)
+        self.embbed_cmd = tf.keras.layers.TimeDistributed(Layers.Dense(model_depth, use_bias=False, activation=None, name='cmd_embedding'))(cmd)
+        # Positional Embedding
+        self.pcoded_state = self.positional_encoding(self.embbed_state, model_depth, settings.sequence_length, name='state_positional_embedding')
+        self.pcoded_cmd = self.positional_encoding(self.embbed_cmd, model_depth, settings.sequence_length, name='cmd_positional_embedding')
+        # Attention Projection
+        with tf.name_scope('state_qkv_projection'):
+            self.SQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_q_projection'))(self.pcoded_state)
+            self.SKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_k_projection'))(self.pcoded_state)
+            self.SVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='state_v_projection'))(self.pcoded_state)
+        with tf.name_scope('cmd_qkv_projection'):
+            self.CQW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_q_projection'))(self.pcoded_cmd)
+            self.CKW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_k_projection'))(self.pcoded_cmd)
+            self.CVW = Layers.TimeDistributed(Layers.Dense(model_depth, activation=get_activation(act), name='cmd_v_projection'))(self.pcoded_cmd)
+        # Attention mechanism
+        self.state_attn = self.attention(self.SQW, self.SKW, self.SVW, float(model_depth), mask, name='state_attn')
+        self.p_attn_state = self.p_attn
+        self.cmd_attn = self.attention(self.CQW, self.CKW, self.CVW, float(model_depth), mask, name='cmd_attn')
+        self.p_attn_cmd = self.p_attn
+        self.concat = tf.concat([self.state_attn, self.cmd_attn], axis=-1)
+        # FeedForward
+        self.xc = self.concat
+        for i, layer_type in enumerate(layers):
+            if layer_type == 'dense':
+                self.xc = Layers.TimeDistributed(Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i)))(self.xc)
+            if layer_type == 'dropout':
+                self.xc = Layers.Dropout(1-settings.dropout, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.nnl = Layers.TimeDistributed(Layers.Dense(settings.output_dim, activation=None, name='outputs'))(self.xc)
+        self.A = Layers.TimeDistributed(Layers.Dense(settings.output_dim,activation=None,use_bias=False))(self.x[:,:,:settings.output_dim])
+        self.B = Layers.TimeDistributed(Layers.Dense(settings.output_dim,activation=None,use_bias=False))(self.x[:,:,settings.output_dim:])
+        self.linear_model = tf.add(self.A,self.B)
+        self.ys_ = tf.add(self.linear_model,self.nnl)
+        self.y_ = self.ys_[:,-1,:]
+        # Loss
+        with tf.name_scope('loss_ops'):
+            a = tf.range(settings.sequence_length,dtype=tf.float32)
+            self.loss_weights = tf.pow(alpha,a)
+            tf.summary.histogram('sequence_weights', self.loss_weights)
+            self.diff_linear = tf.square(tf.subtract(self.linear_model, self.y))
+            self.diff_nnl = tf.square(tf.subtract(tf.subtract(self.y, self.linear_model),self.nnl))
+            self.diff_full = tf.add(self.diff_nnl, self.diff_linear)
+            self.seq_loss = tf.multiply(tf.reduce_mean(self.diff_full, axis = -1),self.loss_weights)
+            self.s_loss = tf.reduce_mean(self.seq_loss, axis = 1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))/tf.reduce_mean(self.loss_weights)
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
+        # Train
+        #self.grad = tf.norm(tf.gradients(self.seq_loss, self.ys_),axis=2)
+        self.acc_op = accuracy(self.y_, self.y[:,-1,:])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -217,8 +409,50 @@ class GraphMLP:
     """
     MLP.
     """
-    def __init__(self, settings, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, layers, params, act='RELU'):
+       
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
 
+        # Reshape
+        self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
+        self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
+        # Operations
+        self.xc = self.xr
+        for i, layer_type in enumerate(layers):
+            if layer_type == 'dense':
+                self.xc = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.xc)
+            if layer_type == 'dropout':
+                self.xc = Layers.Dropout(self.drop_rate, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.y_ = Layers.Dense(settings.output_dim, activation=None, name='outputs')(self.xc)
+
+        # Loss
+        with tf.name_scope('loss_ops'):
+            self.diff = tf.square(tf.subtract(self.y_, self.yr))
+            self.s_loss = tf.reduce_mean(self.diff, axis=1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
+        # Train
+        print(self.y_)
+        print(self.s_loss)
+        self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.y_, self.yr)
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
+
+class GraphMLP_PHY:
+    """
+    MLP with state space and adaptive control inspiration.
+    """
+    def __init__(self, settings, layers, params, act='RELU'):
+       
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
@@ -234,21 +468,103 @@ class GraphMLP:
         self.xc = self.xr
         for i, layer_type in enumerate(layers):
             if layer_type == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
-
+                self.xc = Layers.Dropout(1-self.keep_prob, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.A = Layers.Dense(settings.output_dim,activation=None,use_bias=False)(self.x[:,-1,:settings.output_dim])
+        self.B = Layers.Dense(settings.output_dim,activation=None,use_bias=False)(self.x[:,-1,settings.output_dim:])
+        self.linear_model = tf.add(self.A,self.B)
+        self.nnl = Layers.Dense(settings.output_dim, activation=None, name='outputs')(self.xc)
+        self.y_ = tf.add(self.linear_model,self.nnl)
         # Loss
         with tf.name_scope('loss_ops'):
-            self.diff = tf.square(tf.subtract(self.y_, self.yr))
-            self.s_loss = tf.reduce_mean(self.diff, axis=1)
+            self.diff_linear = tf.square(tf.subtract(self.linear_model, self.yr))
+            self.diff_nnl = tf.square(tf.subtract(tf.subtract(self.yr, self.linear_model),self.nnl))
+            self.diff_full = tf.add(self.diff_nnl, self.diff_linear)
+            self.s_loss = tf.reduce_mean(self.diff_full, axis=1)
             self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
             tf.summary.scalar('w_loss', self.w_loss)
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
-        self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        #self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.y_, self.yr)
+        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
+
+class GraphMLP_EN:
+    """
+    MLP.
+    """
+    def __init__(self, settings, layers, params, act='RELU'):
+       
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+
+        # Reshape
+        self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
+        self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
+        # Operations
+        self.nl = self.xr
+        with tf.name_scope('non_linearity'):
+            for i, layer_type in enumerate(layers):
+                if layer_type == 'dense':
+                    self.nl = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.nl)
+                if layer_type == 'dropout':
+                    self.nl = Layers.Dropout(1-self.keep_prob, name='drop_'+str(i))(self.nl, training=self.is_training)
+            self.nl = Layers.Dense(settings.output_dim, activation=None, name='non_linearity')(self.nl)
+        self.cmd = self.x[:,-1,settings.output_dim:]
+        self.state = self.x[:,-1,:settings.output_dim]
+        with tf.name_scope('cmd'):
+            for i, layer_type in enumerate(layers):
+                if layer_type == 'dense':
+                    self.cmd = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.cmd)
+                if layer_type == 'dropout':
+                    self.cmd = Layers.Dropout(1-self.keep_prob, name='drop_'+str(i))(self.cmd, training=self.is_training)
+            self.cmd = Layers.Dense(settings.output_dim, activation=None, name='input_commands')(self.cmd)
+        #self.en = tf.identity(self.state)
+        #with tf.name_scope('energy'):
+        #    for i, layer_type in enumerate(layers):
+        #        if layer_type == 'dense':
+        #            self.en = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.en)
+        #        if layer_type == 'dropout':
+        #            self.en = Layers.Dropout(1-self.keep_prob, name='drop_'+str(i))(self.en, training=self.is_training)
+        #    self.en = Layers.Dense(settings.output_dim, activation=None, name='resistance')(self.en)
+        #self.decay = tf.identity(self.state)
+        #with tf.name_scope('decay'):
+        #    for i, layer_type in enumerate(layers):
+        #        if layer_type == 'dense':
+        #            self.decay = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.decay)
+        #        if layer_type == 'dropout':
+        #            self.decay = Layers.Dropout(1-self.keep_prob, name='drop_'+str(i))(self.decay, training=self.is_training)
+        #    self.decay = Layers.Dense(1, activation=None, name='energy_decay')(self.decay)
+        #w_init = tf.random_normal_initializer()
+        #self.wA = tf.Variable(initial_value=w_init(shape=(self.state.shape[-1], settings.output_dim),dtype='float32'),trainable=True)
+        self.A = Layers.Dense(settings.output_dim,activation=None,use_bias=False)(self.state)
+        #self.A = tf.matmul(self.state,self.wA)#Layers.Dense(settings.output_dim,activation=None,use_bias=False)(self.state)
+        self.B = Layers.Dense(settings.output_dim,activation=None,use_bias=False)(self.cmd)
+        self.linear_model = tf.add(self.A,self.B)
+        #self.y_ = tf.subtract(tf.add(self.linear_model,self.nl),self.en)
+        self.y_ = tf.add(self.linear_model,self.nl)
+        # Loss
+        with tf.name_scope('loss_ops'):
+            self.diff_linear = tf.square(tf.subtract(self.linear_model, self.yr))
+            self.diff_nnl = tf.square(tf.subtract(tf.subtract(self.yr, self.linear_model),self.nl))
+            #self.energy_diff = tf.matmul(self.state,tf.pow(self.wA,25))
+            #print(self.energy_diff)
+            self.diff_full = tf.add(self.diff_nnl, self.diff_linear)
+            self.s_loss = tf.reduce_mean(self.diff_full, axis=1)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
+        # Train
+        #self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -264,7 +580,7 @@ class GraphMLP_CPLX:
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
 
         # Embed
@@ -305,7 +621,7 @@ class GraphMLP_CPLX:
         with tf.name_scope('Activation'):
             self.xr = tf.math.real(biasadd)
 
-        self.y_ = tf.layers.dense(self.xr, settings.output_dim,  activation=None, name='output')
+        self.y_ = tf.layers.dense(self.xr, settings.output_dim,  activation=None, name='outputs')
         # Loss
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.yr))
@@ -315,7 +631,7 @@ class GraphMLP_CPLX:
             tf.summary.scalar('loss', self.s_loss)
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -324,14 +640,14 @@ class GraphCNN:
     """
     CNN.
     """
-    def __init__(self, settings, layers, params, act=tf.nn.relu):
+    def __init__(self, settings, layers, params, act='RELU'):
 
         # PLACEHOLDERS
         self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length, settings.input_dim], name='inputs')
         self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
 
         # Reshape
@@ -341,17 +657,17 @@ class GraphCNN:
         self.xc = self.x
         for i, layer_type in enumerate(layers):
             if layer_type == 'conv':
-                self.xc = tf.layers.conv1d(self.xc, params[i][0], params[i][1], padding='same', activation=act, name='conv1D_'+str(i))
+                self.xc = tf.layers.Conv1D(params[i][0], params[i][1], padding='same', activation=get_activation(act), name='conv1D_'+str(i))(self.xc)
             if layer_type == 'pool':
-                self.xc = tf.layers.max_pooling1d(self.xc, params[i], params[i], padding='same', name='max_pool1D_'+str(i))
+                self.xc = Layers.MaxPool1D(params[i], params[i], padding='same', name='max_pool1D_'+str(i))(self.xc)
             if layer_type == 'dense':
                 if must_reshape:
-                    self.xc = tf.layers.flatten(self.xc, name='flatten')
+                    self.xc = Layers.Flatten(name='flatten')(self.xc)
                     must_reshape = False
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.xc)
             if layer_type == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+                self.xc = Layers.Dropout(self.drop_rate, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.y_ = Layers.Dense(settings.output_dim, activation=None, name='outputs')(self.xc)
 
         # Loss
         with tf.name_scope('loss_ops'):
@@ -362,7 +678,7 @@ class GraphCNN:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_, self.yr)
+        self.acc_op = accuracy(self.y_, self.yr)
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -371,16 +687,16 @@ class GraphRNN:
     """
     RNN.
     """
-    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act='RELU'):
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'inputs')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
         self.hs = tf.placeholder(tf.float32, [recurrent_layers, None, hidden_state], name = 'hidden_state')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
        
         # Hidden-State definition 
@@ -409,10 +725,10 @@ class GraphRNN:
         self.xc = self.tensor_state
         for i, layer in enumerate(layer_type):
             if layer == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = tf.layers.dense(self.xc, params[i], activation=get_activation(act), name='dense_'+str(i))
             if layer == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+                self.xc = tf.layers.dropout(self.xc, self.drop_rate, name='drop_'+str(i))
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
         # Losses
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.y))
@@ -422,7 +738,7 @@ class GraphRNN:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_[-1], self.y[-1])
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -434,16 +750,16 @@ class GraphGRU:
     """
     GRU.
     """
-    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act='RELU'):
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'inputs')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
         self.hs = tf.placeholder(tf.float32, [recurrent_layers, None, hidden_state], name = 'hidden_state')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
        
         # Hidden-State definition 
@@ -472,10 +788,10 @@ class GraphGRU:
         self.xc = self.tensor_state
         for i, layer in enumerate(layer_type):
             if layer == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = tf.layers.dense(self.xc, params[i], activation=get_activation(act), name='dense_'+str(i))
             if layer == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+                self.xc = tf.layers.dropout(self.xc, self.drop_rate, name='drop_'+str(i))
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
         # Losses
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.y))
@@ -485,7 +801,7 @@ class GraphGRU:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_[-1], self.y[-1])
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()
@@ -497,16 +813,16 @@ class GraphLSTM:
     """
     LSTM.
     """
-    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act=tf.nn.relu):
+    def __init__(self, settings, hidden_state, recurrent_layers, layer_type, params, act='RELU'):
         self.v_recurrent_layers = recurrent_layers
         self.v_hidden_state = hidden_state
         # PLACEHOLDERS
-        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'input')
+        self.x = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.input_dim], name = 'inputs')
         self.y = tf.placeholder(tf.float32, [None, settings.sequence_length, settings.output_dim], name = 'target')
         self.hs = tf.placeholder(tf.float32, [recurrent_layers, 2, None, hidden_state], name = 'hidden_state')
         self.step = tf.placeholder(tf.int32, name='step')
         self.is_training = tf.placeholder(tf.bool, name='is_training')
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
         self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
        
         # Hidden-State definition 
@@ -538,10 +854,10 @@ class GraphLSTM:
         self.xc = self.tensor_state
         for i, layer in enumerate(layer_type):
             if layer == 'dense':
-                self.xc = tf.layers.dense(self.xc, params[i], activation=act, name='dense_'+str(i))
+                self.xc = tf.layers.dense(self.xc, params[i], activation=get_activation(act), name='dense_'+str(i))
             if layer == 'dropout':
-                self.xc = tf.layers.dropout(self.xc, 1-settings.dropout, name='drop_'+str(i))
-        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='output')
+                self.xc = tf.layers.dropout(self.xc, self.drop_rate, name='drop_'+str(i))
+        self.y_ = tf.layers.dense(self.xc, settings.output_dim, activation=None, name='outputs')
         # Losses
         with tf.name_scope('loss_ops'):
             self.diff = tf.square(tf.subtract(self.y_, self.y))
@@ -551,7 +867,7 @@ class GraphLSTM:
             tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
         # Train
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
-        self.acc_op, self.std_op = accuracy(self.y_[-1], self.y[-1])
+        self.acc_op = accuracy(self.y_[-1], self.y[-1])
         self.train_step = train_fn(self.w_loss, settings.learning_rate)
         # Tensorboard
         self.merged = tf.summary.merge_all()

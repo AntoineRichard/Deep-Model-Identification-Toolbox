@@ -2,10 +2,10 @@ import os
 from settings import Settings
 
 def select_train_object(sts):
-    seq2seq = ['RNN','LSTM','GRU','ATTNMP', 'ATTNMPMH']
-    attn = ['ATTNMP','ATTNMPMH']
+    seq2seq = ['RNN','LSTM','GRU','ATTNMP', 'ATTNMPMH', 'ATTNMPMHPHY']
+    attn = ['ATTNMP','ATTNMPMH', 'ATTNMPMHPHY']
     rnn = ['RNN','LSTM','GRU']
-    seq2pts = ['MLP','CNN','MLPCPLX','ATTNSP']
+    seq2pts = ['MLP','MLPPHY','MLPEN','CNN','MLPCPLX','ATTNSP']
     name = sts.model.split('_')
     if sts.reader_mode == 'classic':
         if name[0] in seq2seq:
@@ -37,7 +37,7 @@ def select_train_object(sts):
             if sts.priorization == 'uniform':
                 train.Training_Seq2Seq(sts)
             elif ((sts.priorization == 'PER') or (sts.priorization == 'per')):
-                raise Exception('PER is not yet supported for seq2seq models.')
+                train.Training_Seq2Seq_PER(sts)
             elif ((sts.priorization == 'GRAD') or (sts.priorization == 'grad')):
                 raise Exception('Gradient upperbound is not yet supported for seq2seq models.')
             else:
@@ -71,6 +71,8 @@ def select_train_object(sts):
                 raise Exception('Unknown priorization mode. Currently supported modes are: uniform, PER, and GRAD.')
         else:
             raise Exception('Unknown model.')
+    elif sts.reader_mode == 'co_teaching':
+        train.Training_CoTeaching(sts)
     else:
         raise Exception('Unknown reader mode. Currently supported modes are: classic, seq2seq, continuous_seq2seq')
 
@@ -79,8 +81,10 @@ def check_if_completed(sts):
         exit(0)
     
 if __name__ == "__main__":
+    print("training")
     settings = Settings()
     check_if_completed(settings)
     import train
+    print("still training")
     select_train_object(settings)
-
+    print("done training")

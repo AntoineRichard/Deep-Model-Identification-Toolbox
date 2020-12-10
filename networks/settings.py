@@ -33,6 +33,9 @@ class Settings:
         self.per_refresh_rate = None
         # Grad settings
         self.superbatch_size = None
+        # Co-Teaching settings
+        self.tau    = None
+        self.k_iter = None
         # Data settings
         self.sequence_length   = None 
         self.forecast          = None
@@ -52,8 +55,17 @@ class Settings:
         self.log_frequency   = None 
         self.learning_rate   = None 
         self.dropout         = None
+        self.decay_mode      = None
+        self.optimizer       = None
         self.val_traj_batch_size  = None 
         self.test_traj_batch_size = None 
+        # Decay Settings
+	self.decay_steps       = None 
+        self.decay_rate        = None 
+        self.decay_values      = None 
+        self.decay_boundaries  = None
+        self.end_learning_rate = None
+        self.decay_power       = None 
         # Model
         self.model        = None
         self.restore      = None
@@ -93,6 +105,9 @@ class Settings:
         parser.add_argument('--update_batchsize', type=int, required=False, help='Size of the batch when updating weights')
         # Grad settings
         parser.add_argument('--superbatch_size', type=int, required=False, help='size of the super batch if using gradient upper-bound priorization scheme')
+        # Grad settings
+        parser.add_argument('--tau', type=float, required=False, help='error estimate')
+        parser.add_argument('--k_iter', type=int, required=False, help='iteration after which the network starts to overfit outliers')
         # Data settings
         parser.add_argument('--max_sequence_size', type=int, default='12', help='number of points used to predict the outputs')
         parser.add_argument('--forecast', type=int, default='1', help='number of points to predict')
@@ -107,12 +122,22 @@ class Settings:
         parser.add_argument('--batch_size', type=int, default='32', help='size of the train batch')
         parser.add_argument('--val_batch_size', type=int, help='size of the validation batch')
         parser.add_argument('--val_traj_batch_size', type=int, default = 1000, help='size of the trajectory validation batch')
-        parser.add_argument('--test_batch_size', type=int, help='size of the test batch')
-        parser.add_argument('--test_traj_batch_size', type=int, default = 1000, help='size of the trajectory test batch')
+        parser.add_argument('--test_batch_size', type=int, required=False, help='size of the test batch')
+        parser.add_argument('--test_traj_batch_size', type=int, required=False, help='size of the trajectory test batch')
         parser.add_argument('--max_iterations', type=int, default='10000', help='maximum number of iterations')
         parser.add_argument('--log_frequency', type=int, default='25', help='Loging frequency in batch.')
         parser.add_argument('--learning_rate', type=float, default='0.005', help='the learning rate')
-        parser.add_argument('--dropout', type=float, default='0.75', help='the learning rate')
+        parser.add_argument('--dropout', type=float, default='0.1', help='the drop rate')
+        parser.add_argument('--optimizer', type=str, default='adam', help='the type of optimizer to use')
+        parser.add_argument('--decay_mode', type=str, default='none', help='the type of learning rate decay to use. Set it to none for no decay.')
+        parser.add_argument('--loss', type=str, default='L2', help='the loss to perform the regression with')
+        # Decay Settings
+	parser.add_argument('--decay_steps', type=int, required=False, help='depends on decay_type.')
+        parser.add_argument('--decay_rate', type=float, required=False, help='depends on decay type.')
+        parser.add_argument('--decay_values', nargs='+', required=False, help='the values of the piecewise constant decay. (a list).')
+        parser.add_argument('--decay_boundaries', nargs='+', required=False, help='the boundaries of the piecewise constant decay. (a list).')
+        parser.add_argument('--end_learning_rate', type=float, required=False, help='the final leanring rate value of the polynomial decay.')
+        parser.add_argument('--decay_power', type=float, required=False, help='the power value of the polynomial decay.')
         # Model
         parser.add_argument('--model', type=str, help='the name of the model check code for available models')
         parser.add_argument('--restore', type=bool, required=False, default=False, help='use a pretrained model as weights for ours.')
@@ -151,6 +176,9 @@ class Settings:
         self.per_refresh_rate = args.per_refresh_rate
         # Grad settings
         self.superbatch_size = args.superbatch_size
+        # CoTeaching settings
+        self.tau = args.tau
+        self.k_iter = args.k_iter
         # Data settings
         self.sequence_length   = args.max_sequence_size
         self.forecast          = args.forecast
@@ -170,8 +198,17 @@ class Settings:
         self.log_frequency   = args.log_frequency
         self.learning_rate   = args.learning_rate
         self.dropout         = args.dropout
+        self.decay_mode      = args.decay_mode
+        self.optimizer       = args.optimizer
         self.val_traj_batch_size  = args.val_traj_batch_size
         self.test_traj_batch_size = args.test_traj_batch_size
+        # Decay Settings
+	self.decay_steps       = args.decay_steps
+        self.decay_rate        = args.decay_rate
+        self.decay_values      = args.decay_values
+        self.decay_boundaries  = args.decay_boundaries
+        self.end_learning_rate = args.end_learning_rate
+        self.decay_power       = args.decay_power
         # Model
         self.model       = args.model
         self.restore     = args.restore
@@ -253,6 +290,43 @@ class Settings:
                 raise Exception('Please set the superbatch_size parameter when using the GRAD')
         else:
             raise Exception('Unknown priorization mode: currently supported mode are uniform (default), GRAD and PER.')
+
+    def check_decay(self):
+        mode = self.decay_mode.lower()
+        if mode == 'exponential':
+            if settings.decay_steps is None:
+		raise Exception('Pease set the decay_steps parameter when using exponential decay. As in tf.train.exponential_decay.')
+            if settings.decay_rate is None:
+		raise Exception('Pease set the decay_rate parameter when using exponential decay. As in tf.train.exponential_decay.')
+        elif mode == 'polynomial':
+            if settings.decay_steps is None:
+		raise Exception('Pease set the decay_steps parameter when using polynomial decay. As in tf.train.polynomial_decay.')
+            if settings.end_learning_rate is None:
+		raise Exception('Pease set the en_learning_rate parameter when using polynomial decay. As in tf.train.polynomial_decay.')
+            if settings.decay_power is None:
+		raise Exception('Pease set the decay_power parameter when using polynomial decay. As in tf.train.polynomial_decay.')
+        elif mode == 'inversetime':
+            if settings.decay_steps is None:
+		raise Exception('Pease set the decay_steps parameter when using inversetime decay. As in tf.train.inverse_time_decay.')
+            if settings.decay_rate is None:
+		raise Exception('Pease set the decay_rate parameter when using inversetime decay. As in tf.train.inverse_time_decay.')
+        elif mode == 'naturalexp':
+            if settings.decay_steps is None:
+		raise Exception('Pease set the decay_steps parameter when using naturalexp decay. As in tf.train.natural_exponential_decay.')
+            if settings.decay_rate is None:
+		raise Exception('Pease set the decay_rate parameter when using naturalexp decay. As in tf.train.natural_exponential_decay.')
+        elif mode == 'piecewiseconstant':
+            if settings.decay_boundaries is None:
+		raise Exception('Pease set the decay_boundaries parameter when using piecewiseconstant decay. As in tf.train.piecewise_constant_decay.')
+            if settings.decay_values is None:
+		raise Exception('Pease set the decay_values parameter when using piecewiseconstant decay. As in tf.train.piecewise_constant_decay.')
+        elif mode == 'gamma':
+            if settings.decay_rate is None:
+		raise Exception('Pease set the decay_steps parameter when using gamma decay.')
+            if settings.decay_steps is None:
+		raise Exception('Pease set the decay_rate parameter when using gamma decay.')
+        else:
+            raise ValueError('error: unknown decay type. Currently supported types are: none, exponential, polynomial, inversetime, naturalexp, piecewiseconstant, gamma.')
 
 
     def run(self):
