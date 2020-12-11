@@ -31,6 +31,8 @@ class Settings:
         self.epsilon = None 
         self.update_batchsize = None
         self.per_refresh_rate = None
+        # Evidential DL settings
+        self.evd_coeff = None 
         # Grad settings
         self.superbatch_size = None
         # Co-Teaching settings
@@ -60,7 +62,7 @@ class Settings:
         self.val_traj_batch_size  = None 
         self.test_traj_batch_size = None 
         # Decay Settings
-	self.decay_steps       = None 
+        self.decay_steps       = None 
         self.decay_rate        = None 
         self.decay_values      = None 
         self.decay_boundaries  = None
@@ -103,9 +105,11 @@ class Settings:
         parser.add_argument('--epsilon', type=float, default = 0.0000001, help='Epsilon as in PER by Schaul.')
         parser.add_argument('--per_refresh_rate', type=int, required=False, help='Amount of steps after which the priorization weights have to be refreshed.')
         parser.add_argument('--update_batchsize', type=int, required=False, help='Size of the batch when updating weights')
+        # Evidential DL settings
+        parser.add_argument('--evd_coeff', type=float, required=False, help='Evidential Deep Learning coefficient')
         # Grad settings
         parser.add_argument('--superbatch_size', type=int, required=False, help='size of the super batch if using gradient upper-bound priorization scheme')
-        # Grad settings
+        # Co-Teaching settings
         parser.add_argument('--tau', type=float, required=False, help='error estimate')
         parser.add_argument('--k_iter', type=int, required=False, help='iteration after which the network starts to overfit outliers')
         # Data settings
@@ -132,7 +136,7 @@ class Settings:
         parser.add_argument('--decay_mode', type=str, default='none', help='the type of learning rate decay to use. Set it to none for no decay.')
         parser.add_argument('--loss', type=str, default='L2', help='the loss to perform the regression with')
         # Decay Settings
-	parser.add_argument('--decay_steps', type=int, required=False, help='depends on decay_type.')
+        parser.add_argument('--decay_steps', type=int, required=False, help='depends on decay_type.')
         parser.add_argument('--decay_rate', type=float, required=False, help='depends on decay type.')
         parser.add_argument('--decay_values', nargs='+', required=False, help='the values of the piecewise constant decay. (a list).')
         parser.add_argument('--decay_boundaries', nargs='+', required=False, help='the boundaries of the piecewise constant decay. (a list).')
@@ -174,6 +178,8 @@ class Settings:
         self.epsilon = args.epsilon
         self.update_batchsize = args.update_batchsize
         self.per_refresh_rate = args.per_refresh_rate
+        # Evidential DL settings
+        self.evd_coeff   = args.evd_coeff
         # Grad settings
         self.superbatch_size = args.superbatch_size
         # CoTeaching settings
@@ -203,7 +209,7 @@ class Settings:
         self.val_traj_batch_size  = args.val_traj_batch_size
         self.test_traj_batch_size = args.test_traj_batch_size
         # Decay Settings
-	self.decay_steps       = args.decay_steps
+        self.decay_steps       = args.decay_steps
         self.decay_rate        = args.decay_rate
         self.decay_values      = args.decay_values
         self.decay_boundaries  = args.decay_boundaries
@@ -295,36 +301,36 @@ class Settings:
         mode = self.decay_mode.lower()
         if mode == 'exponential':
             if settings.decay_steps is None:
-		raise Exception('Pease set the decay_steps parameter when using exponential decay. As in tf.train.exponential_decay.')
+                raise Exception('Pease set the decay_steps parameter when using exponential decay. As in tf.train.exponential_decay.')
             if settings.decay_rate is None:
-		raise Exception('Pease set the decay_rate parameter when using exponential decay. As in tf.train.exponential_decay.')
+                raise Exception('Pease set the decay_rate parameter when using exponential decay. As in tf.train.exponential_decay.')
         elif mode == 'polynomial':
             if settings.decay_steps is None:
-		raise Exception('Pease set the decay_steps parameter when using polynomial decay. As in tf.train.polynomial_decay.')
+                raise Exception('Pease set the decay_steps parameter when using polynomial decay. As in tf.train.polynomial_decay.')
             if settings.end_learning_rate is None:
-		raise Exception('Pease set the en_learning_rate parameter when using polynomial decay. As in tf.train.polynomial_decay.')
+                raise Exception('Pease set the en_learning_rate parameter when using polynomial decay. As in tf.train.polynomial_decay.')
             if settings.decay_power is None:
-		raise Exception('Pease set the decay_power parameter when using polynomial decay. As in tf.train.polynomial_decay.')
+                raise Exception('Pease set the decay_power parameter when using polynomial decay. As in tf.train.polynomial_decay.')
         elif mode == 'inversetime':
             if settings.decay_steps is None:
-		raise Exception('Pease set the decay_steps parameter when using inversetime decay. As in tf.train.inverse_time_decay.')
+                raise Exception('Pease set the decay_steps parameter when using inversetime decay. As in tf.train.inverse_time_decay.')
             if settings.decay_rate is None:
-		raise Exception('Pease set the decay_rate parameter when using inversetime decay. As in tf.train.inverse_time_decay.')
+                raise Exception('Pease set the decay_rate parameter when using inversetime decay. As in tf.train.inverse_time_decay.')
         elif mode == 'naturalexp':
             if settings.decay_steps is None:
-		raise Exception('Pease set the decay_steps parameter when using naturalexp decay. As in tf.train.natural_exponential_decay.')
+                raise Exception('Pease set the decay_steps parameter when using naturalexp decay. As in tf.train.natural_exponential_decay.')
             if settings.decay_rate is None:
-		raise Exception('Pease set the decay_rate parameter when using naturalexp decay. As in tf.train.natural_exponential_decay.')
+                raise Exception('Pease set the decay_rate parameter when using naturalexp decay. As in tf.train.natural_exponential_decay.')
         elif mode == 'piecewiseconstant':
             if settings.decay_boundaries is None:
-		raise Exception('Pease set the decay_boundaries parameter when using piecewiseconstant decay. As in tf.train.piecewise_constant_decay.')
+                raise Exception('Pease set the decay_boundaries parameter when using piecewiseconstant decay. As in tf.train.piecewise_constant_decay.')
             if settings.decay_values is None:
-		raise Exception('Pease set the decay_values parameter when using piecewiseconstant decay. As in tf.train.piecewise_constant_decay.')
+                raise Exception('Pease set the decay_values parameter when using piecewiseconstant decay. As in tf.train.piecewise_constant_decay.')
         elif mode == 'gamma':
             if settings.decay_rate is None:
-		raise Exception('Pease set the decay_steps parameter when using gamma decay.')
+                raise Exception('Pease set the decay_steps parameter when using gamma decay.')
             if settings.decay_steps is None:
-		raise Exception('Pease set the decay_rate parameter when using gamma decay.')
+                raise Exception('Pease set the decay_rate parameter when using gamma decay.')
         else:
             raise ValueError('error: unknown decay type. Currently supported types are: none, exponential, polynomial, inversetime, naturalexp, piecewiseconstant, gamma.')
 

@@ -1,91 +1,13 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers as Layers
+from activations import *
+from losses import *
 
-def get_activation(name):
-    """
-    Parses a string to extract the activation function.
-    """
-    string = name.split(':')
-
-    if string[0] == 'RELU':
-        activation = Layers.ReLU()
-    elif string[0] == 'TANH':
-        activation = Layers.Activation(tf.keras.activations.tanh)
-    elif string[0] == 'SIGMOID':
-        activation = Layers.Activation(tf.keras.activations.sigmoid)
-    elif string[0] == 'LRELU':
-        try:
-            activation = Layers.LeakyReLU(float(string[1]))
-        except:
-            warnings.warn('Using default alpha parameter : 0.1.', SyntaxWarning)
-            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
-            activation = Layers.LeakyReLU(0.1)
-    elif string[0] == 'PRELU':
-        activation = Layers.PReLU()
-    elif string[0] == 'ELU':
-        try:
-            activation = Layers.ELU(float(string[1]))
-        except:
-            warnings.warn('Using default alpha parameter : 1.0.', SyntaxWarning)
-            warnings.warn('To set a custom alpha value type LRELU:alpha instead of LRELU', SyntaxWarning)
-            activation = Layers.ELU(1.0)
-    elif string[0] == 'SELU':
-        activation = Layers.Activation(tf.keras.activations.selu)
-    elif string[0] == 'SWISH':
-        activation = swish()
-    elif string[0] == 'CSWISH':
-        activation = Layers.Activation(cswish)
-    elif string[0] == 'MISH':
-        activation = Layers.Activation(mish)
-    else:
-        raise ValueError('error: unknown activation function. Currently supported activation functions are RELU, PRELU, LRELU, SELU, ELU, TANH, SIGMOIG, SWISH, CSWISH (constan version of swish), MISH.')
-    return activation
-
-def apply_optimizer(opt, learning_rate, loss):
-    """
-    Get the optimizer selected by the user
-    """
-    opt = opt.lower()
-    if opt == 'adam':
-        return tf.train.AdamOptimizer(learning_rate).minimize(loss)
-    elif opt = 'sgd':
-        return tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
-    elif opt = 'momentum':
-        return tf.train.MomentumOptimizer(learning_rate).minimize(loss)
-    elif opt = 'adagrad'
-        return tf.train.AdagradOptimizer(learning_rate).minimize(loss)
-    elif opt = 'rmsprop'
-        return tf.train.RMSPropOptimizer(learning_rate).minimize(loss)
-    else:
-        raise ValueError('error: unknown optimizer. Currently supported optimizers are: adam, sgd, momentum, adagrad, rmsprop.')
-
-def apply_decay(step, learning_rate, settings):
-    """
-    Applies decay is selected by user
-    """
-    mode = settings.decay_mode.lower()
-    if mode == 'none':
-        return learning_rate
-    elif mode == 'exponential':
-        return tf.train.exponential_decay(learning_rate, step, settings.decay_steps, settings.decay_rate)
-    elif mode == 'polynomial':
-        return tf.train.polynomial_decay(learning_rate, step, settings.decay_steps, settings.end_learning_rate, settings.decay_power)
-    elif mode == 'inversetime':
-        return tf.train.inverse_time_decay(learning_rate, step, settings.decay_steps, settings.decay_rate)
-    elif mode == 'naturalexp':
-        return tf.train.natural_exp_decay(learning_rate, step, settings.decay_steps, settings.decay_rate)
-    elif mode == 'piecewiseconstant':
-        return tf.train.piecewise_constant_decay(step, settings.decay_boundaries, settings.decay_values)
-    elif mode == 'gamma':
-        return learning_rate * tf.pow(settings.decay_rate, tf.floor(step/settings.decay_steps))
-    else:
-        raise ValueError('error: unknown decay type. Currently supported types are: none, exponential, polynomial, inversetime, naturalexp, piecewiseconstant, gamma.') 
     
 def accuracy(est, gt):
     with tf.name_scope('accuracy_op'):
-        diff = tf.square(tf.subtract(est, gt))
-        accuracy = tf.sqrt(tf.reduce_mean(tf.cast(diff, tf.float32),axis = 0))
+        accuracy = RMSE(est, gt)
         tf.summary.scalar('accuracy', tf.reduce_mean(accuracy))
     return accuracy
 
@@ -96,53 +18,32 @@ def train_fn(loss, learning_rate, step, settings):
         train_step = apply_optimizer(settings.optimizer, learning_rate, loss)
     return train_step
 
-def cswish(inputs):
-    return tf.math.multiply(inputs, tf.nn.sigmoid(inputs))
 
-class swish(Layers.Layer):
-    def __init__(self):
-        super(swish, self).__init__()
-        self.beta = tf.Variable(1.0, trainable=True)
+class DenseNormalGamma(Layers.Layer):
+    def __init__(self, units, name):
+        super(DenseNormalGamma, self).__init__()
+        self.units = int(units)
+        self.dense = Layers.Dense(4 * self.units, activation=None, name=name)
 
-    def call(self, inputs):
-        tf.summary.scalar('swish_value', self.beta)
-        return tf.math.multiply(inputs,tf.math.multiply(self.beta, tf.nn.sigmoid(inputs)))
+    def evidence(self, x):
+        return tf.nn.softplus(x)
 
-def mish(inputs):
-    return tf.math.multiply(inputs,tf.nn.tanh(tf.nn.softplus(inputs)))
-'''
-def evonorm_s0(x, gamma, beta, nonlinearity):
-    if nonlinearity:
-        v = trainable_variable_ones(shape=gamma.shape)
-        num = x * tf.nn.sigmoid(v * x)
-        return num / group_std(x) * gamma + beta
-    else:
-        return x * gamma + beta
+    def call(self, x):
+        output = self.dense(x)
+        mu, logv, logalpha, logbeta = tf.split(output, 4, axis=-1)
+        v = self.evidence(logv)
+        alpha = self.evidence(logalpha) + 1
+        beta = self.evidence(logbeta)
+        return tf.concat([mu, v, alpha, beta], axis=-1)
 
-def evonorm_b0(x, gamma, beta, nonlinearity, training):
-    if nonlinearity:
-        v = trainable variable ones(shape=gamma.shape)
-        batch_std = batch_mean_and_std(x, training)
-        den = tf.maximum(batch_std, v * x + instance_std(x))
-        return x / den * gamma + beta
-    else:
-        return x * gamma + beta
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], 4 * self.units)
 
-def instance_std(x, eps=1e−5):
-    var = tf.nn.moments(x, axes=[1, 2], keepdims=True)
-    return tf.sqrt(var + eps)
+    def get_config(self):
+        base_config = super(DenseNormalGamma, self).get_config()
+        base_config['units'] = self.units
+        return base_config
 
-def group_std(x, groups=32, eps=1e−5):
-    N, SS, IS = x.shape
-    x = tf.reshape(x, [N, SS, groups, IS // groups])
-    var = tf.nn.moments(x, [1, 2, 4], keepdims=True)
-    std = tf.sqrt(var + eps)
-    std = tf.broadcast_to(std, x.shape)
-    return tf.reshape(std, [N, SS, IS])
-
-def trainable_variable_ones(shape, name="v"):
-   return tf.get_variable(name, shape=shape,initializer=tf.ones_initializer())
-'''
 
 class GraphATTNSP:
     """
@@ -443,7 +344,50 @@ class GraphMLP:
         print(self.s_loss)
         self.grad = tf.norm(tf.gradients(self.s_loss, self.y_),axis=2)
         self.acc_op = accuracy(self.y_, self.yr)
-        self.train_step = train_fn(self.w_loss, settings.learning_rate)
+        self.train_step = train_fn(self.w_loss, settings.learning_rate, self.step, settings)
+        # Tensorboard
+        self.merged = tf.summary.merge_all()
+
+class GraphEvdMLP:
+    """
+    MLP.
+    """
+    def __init__(self, settings, layers, params, act='RELU'):
+       
+        # PLACEHOLDERS
+        self.x = tf.placeholder(tf.float32, shape=[None, settings.sequence_length,  settings.input_dim], name='inputs')
+        self.y = tf.placeholder(tf.float32, shape=[None, settings.forecast, settings.output_dim], name='target')
+        self.step = tf.placeholder(tf.int32, name='step')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.drop_rate = tf.placeholder(tf.float32, name='keep_prob')
+        self.weights = tf.placeholder(tf.float32, shape=[None], name='weights')
+
+        # Reshape
+        self.xr = tf.reshape(self.x, [-1, settings.sequence_length*settings.input_dim],name='reshape_input')
+        self.yr = tf.reshape(self.y, [-1, settings.forecast*settings.output_dim],name='reshape_target')
+        # Operations
+        self.xc = self.xr
+        for i, layer_type in enumerate(layers):
+            if layer_type == 'dense':
+                self.xc = Layers.Dense(params[i], activation=get_activation(act), name='dense_'+str(i))(self.xc)
+            if layer_type == 'dropout':
+                self.xc = Layers.Dropout(self.drop_rate, name='drop_'+str(i))(self.xc, training=self.is_training)
+        self.pred = DenseNormalGamma(settings.output_dim, name='outputs')(self.xc)
+        self.y_ = tf.split(self.pred, 4, axis=-1)[0]
+        # Loss
+        with tf.name_scope('loss_ops'):
+            self.s_loss = tf.reduce_mean(EvidentialRegression(self.y, self.pred, coeff=1e-2),axis=-1)
+            print(self.s_loss)
+            self.w_loss = tf.reduce_mean(tf.multiply(self.s_loss, self.weights))
+            tf.summary.scalar('w_loss', self.w_loss)
+            tf.summary.scalar('loss', tf.reduce_mean(self.s_loss))
+        # Train
+        print(self.pred)
+        print(self.y_)
+        print(self.s_loss)
+        #self.grad = tf.norm(tf.gradients(self.s_loss, self.pred),axis=2)
+        self.acc_op = accuracy(self.y_, self.yr)
+        self.train_step = train_fn(self.w_loss, settings.learning_rate, self.step, settings)
         # Tensorboard
         self.merged = tf.summary.merge_all()
 

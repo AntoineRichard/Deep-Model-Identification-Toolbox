@@ -124,6 +124,44 @@ def MLP_Generator(name,settings):
             raise ValueError('Error parsing model name: unknown word')
     return models.GraphMLP(settings, layer_type, layer_param, act=activation)
 
+def MLP_EVD_Generator(name,settings):
+    """
+    Parses a string to extract the model parameters. In this case,
+    a MLP (Multi Layer Perceptron).
+
+    Available layers are the following:
+      Dense layers: 'd' followed by a number: d256, d48, d12
+                    where the number indicates the number of
+                    neurons in that layer.
+      Dropout layers: 'r', the keeprate is defined when starting
+                      the training.
+    
+    Syntexically, the string must start with the type of model, then
+    the type of activation function must follow, then follows as much
+    layers as desired. Each 'word' must be separated using underscores.
+  
+    A standard MLP would be defined as follows:
+      MLP_ (the type of network)
+      MLP_RELU_ (the activation function to chose among the available one)
+      MLP_RELU_d256_d64_r_d32 (an example of a MLP model)
+
+    All the combinations should work.
+    """
+    activation = get_activation(name)
+    d = name[2:]
+    layer_type = []
+    layer_param = []
+    for di in d:
+        if di[0] == 'd':
+            layer_type.append('dense')
+            layer_param.append(int(di[1:]))
+        elif di[0] == 'r':
+            layer_type.append('dropout')
+            layer_param.append(0)
+        else:
+            raise ValueError('Error parsing model name: unknown word')
+    return models.GraphEvdMLP(settings, layer_type, layer_param, act=activation)
+
 def MLP_PHY_Generator(name,settings):
     """
     Parses a string to extract the model parameters. In this case,
@@ -591,6 +629,8 @@ def get_graph(settings,name='net'):
     name = settings.model.split('_')
     if name[0] == 'MLP':
         return MLP_Generator(name,settings)
+    if name[0] == 'EVDMLP':
+        return MLP_EVD_Generator(name,settings)
     if name[0] == 'MLPPHY':
         return MLP_PHY_Generator(name,settings)
     if name[0] == 'MLPEN':
